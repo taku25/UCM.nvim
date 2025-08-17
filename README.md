@@ -168,16 +168,16 @@ opts = {
       mappings = {
         ["<leader>n"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").new({ target_dir = node.path })
+          require("UCMUI.api").new_class({ target_dir = node.path })
         end,
         ["<leader>d"] = function(state)
           -- Just pass the path from Neo-tree as an argument!
           local node = state.tree:get_node()
-          require("UCMUI.api").delete({ file_path = node.path })
+          require("UCMUI.api").delete_class({ file_path = node.path })
         end,
         ["<leader>r"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").rename({ file_path = node.path })
+          require("UCMUI.api").rename_class({ file_path = node.path })
         end,
       },
     },
