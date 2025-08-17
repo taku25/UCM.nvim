@@ -6,6 +6,8 @@ local M = {}
 -- 1. Default Configuration Options
 ----------------------------------------------------------------------
 local defaults = {
+  ui_frontend = "auto", -- "auto", "telescope", "fzf-lua", "native"
+
   confirm_on_new = true,
   default_parent_class = "Actor",
 
@@ -254,17 +256,14 @@ M.user_config = {}
 -- @param new_table table: The table with new values to merge from.
 -- @return table: The deeply merged table.
 local function deep_merge_tables(base_table, new_table)
+  -- (This function is now safe, as it will only be called with tables)
   base_table = base_table or {}
   new_table = new_table or {}
-
-  local merged = vim.deepcopy(base_table) -- Start with a deep copy of the base
-  
+  local merged = vim.deepcopy(base_table)
   for k, v in pairs(new_table) do
     if type(v) == "table" and type(merged[k]) == "table" then
-      -- If both are tables, recurse (deep merge)
       merged[k] = deep_merge_tables(merged[k], v)
     else
-      -- Otherwise, overwrite
       merged[k] = v
     end
   end
@@ -358,29 +357,23 @@ end
 function M.load_config(root_dir)
   local new_config = vim.deepcopy(defaults)
 
-  -- Merge user options
-  if M.user_config then
-    for k, v in pairs(M.user_config) do
-      if k == "template_rules" or k == "include_rules" then
-        new_config[k] = merge_rules_by_name(new_config[k], v)
-      elseif k == "folder_rules" then
-        new_config[k] = v
-      else
-        new_config[k] = deep_merge_tables(new_config[k], v) -- Use deep_merge for other keys
-      end
-    end
-  end
+  -- Combine user_config and project_config into a single table to process
+  local project_conf, _ = load_project_config(root_dir)
+  local configs_to_merge = { M.user_config, project_conf }
 
-  -- Merge project-specific .ucmrc config
-  local project_conf, err = load_project_config(root_dir)
-  if not err and project_conf then
-    for k, v in pairs(project_conf) do
-      if k == "template_rules" or k == "include_rules" then
-        new_config[k] = merge_rules_by_name(new_config[k], v)
-      elseif k == "folder_rules" then
-        new_config[k] = v
-      else
-        new_config[k] = deep_merge_tables(new_config[k], v) -- Use deep_merge for other keys
+  for _, conf_table in ipairs(configs_to_merge) do
+    if conf_table then
+      for k, v in pairs(conf_table) do
+        -- ★★★ これが、あなたの最後のバグを修正する、最終的なロジックです ★★★
+        if k == "template_rules" or k == "include_rules" then
+          new_config[k] = merge_rules_by_name(new_config[k], v)
+        elseif type(v) == "table" and type(new_config[k]) == "table" and k ~= "folder_rules" then
+          -- If both the default and user value are tables, deep merge them.
+          new_config[k] = deep_merge_tables(new_config[k], v)
+        else
+          -- For simple values (string, boolean, number) or folder_rules, just overwrite.
+          new_config[k] = v
+        end
       end
     end
   end

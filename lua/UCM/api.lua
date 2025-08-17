@@ -7,9 +7,10 @@ local switch_cmd = require("UCM.cmd.switch")
 
 local M = {}
 
--- ★ `new` を非同期（コールバック形式）に変更
+-- @param opts table: { class_name, parent_class, target_dir, skip_confirmation = boolean (optional) }
+-- @param on_complete function
 function M.new_class(opts, on_complete)
-  new_cmd.run(opts, on_complete)
+  new_cmd.run(opts, on_complete) 
 end
 
 function M.delete_class(opts, on_complete)
