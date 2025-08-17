@@ -6,13 +6,22 @@ local logger = require("UCM.logger")
 
 local M = {}
 
-function M.create(opts, on_complete)
+local function on_cancel(result, opts)
+  --ユーザーのキャンセルも呼ぶ
+  logger.info("Operation canceled by user.")
+  if opts.on_cancel then
+     opts.on_cancel(result)
+  end
+end
+
+
+function M.run(opts)
   opts = opts or {}
   local collected_opts = {}
 
   -- この関数が、すべての情報が集まった後の、共通の処理フロー
   local function start_creation_flow()
-    api.new_class(collected_opts, on_complete)
+    api.new_class(collected_opts, ops)
   end
 
   local function ask_for_parent_class()
@@ -31,7 +40,9 @@ function M.create(opts, on_complete)
     end
     table.sort(unique_choices)
     frontend.select_parent_class(unique_choices, function(selected_parent)
-      if not selected_parent then return on_complete(false, "canceled") end
+      if not selected_parent then
+        return on_cancel("canceled", opts)
+      end
       collected_opts.parent_class = selected_parent
 
       -- すべての情報が集まったので、最終確認＆実行へ
@@ -41,7 +52,9 @@ function M.create(opts, on_complete)
 
   local function ask_for_class_name()
     vim.ui.input({ prompt = "Enter New Class Name:" }, function(class_name)
-      if not class_name or class_name == "" then return on_complete(false, "canceled") end
+      if not class_name or class_name == "" then
+        return on_cancel("canceled", opts)
+      end
       collected_opts.class_name = class_name
       ask_for_parent_class()
     end)
@@ -57,7 +70,9 @@ function M.create(opts, on_complete)
   else
     -- そうでなければ、ユーザーにディレクトリを選んでもらう
     frontend.select_code_directory(function(target_dir)
-      if not target_dir then return on_complete(false, "canceled") end
+      if not target_dir then
+        return on_cancel("canceled", opts)
+      end
       collected_opts.target_dir = target_dir
       collected_opts.skip_confirmation = false
       ask_for_class_name()

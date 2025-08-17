@@ -43,19 +43,55 @@ local function write_file(file_path, content)
   return true, nil
 end
 
+local function on_complete(result, opts)
+  logger.info("Successfully created class: " .. result.class_name)
+  logger.info(" -> Template used: " .. result.template_used)
+  logger.info(" -> Header file: " .. result.header_path)
+  logger.info(" -> Source file: " .. result.source_path)
+  local open_setting = conf.active_config.auto_open_on_new
+  if open_setting == "header" and result.header_path then
+    vim.cmd("edit " .. vim.fn.fnameescape(result.header_path))
+  elseif open_setting == "source" and result.source_path then
+    vim.cmd("edit " .. vim.fn.fnameescape(result.source_path))
+  elseif open_setting == "both" and result.header_path and result.source_path then
+    vim.cmd("edit " .. vim.fn.fnameescape(result.header_path)); vim.cmd("vsplit " .. vim.fn.fnameescape(result.source_path))
+  end
+
+
+  --ユーザーのコンプリートも呼ぶ
+  if opts.on_comple then
+     opts.on_comple(result)
+  end
+end
+
+local function on_cancel(result, opts)
+  --ユーザーのキャンセルも呼ぶ
+  logger.error("Operation failed: " .. tostring(result))
+  if opts.on_cancel then
+     opts.on_cancel(result)
+  end
+end
+
+local function on_exit(result, opts)
+  --ユーザーのキャンセルも呼ぶ
+  logger.error("Operation failed: " .. tostring(result))
+  if opts.on_exit then
+     opts.on_exit(result)
+  end
+end
+
 ---
 -- @param opts table: { class_name, parent_class, target_dir,  }
--- @param on_complete function: A callback function(ok, result)
-function M.run(opts, on_complete)
+function M.run(opts)
   -- Step 1: Gather all information needed for file creation
   local context, err = cmd_core.resolve_creation_context(opts.target_dir)
   if not context then
-    return on_complete(false, err)
+    return on_exit(err, opts)
   end
 
   local template_def = selectors.tpl.select(opts.parent_class)
   if not template_def then
-    return on_complete(false, "No suitable template found for parent class: " .. opts.parent_class)
+    return on_exit("No suitable template found for parent class: " .. opts.parent_class, opts)
   end
 
   -- Step 2: Prepare template content
@@ -91,7 +127,7 @@ function M.run(opts, on_complete)
 
   local template_base_path = path.get_template_base_path(template_def, "UCM")
   if not template_base_path then
-    return on_complete(false, "Could not determine template base path.")
+    return on_exit("Could not determine template base path.", opts)
   end
 
   local results = {
@@ -112,7 +148,7 @@ function M.run(opts, on_complete)
     local template_path = fs.joinpath(template_base_path, info.template_file)
     local content, template_err = process_template(template_path, replacements)
     if not content then
-      return on_complete(false, template_err)
+      return on_exit(template_err, opts)
     end
     -- ★ 安全な複数行フォーマット
     results[file_type] = {
@@ -120,24 +156,25 @@ function M.run(opts, on_complete)
       content = content,
     }
   end
+  results.class_name = opts.class_name
   results.header_path = results.header.path
   results.source_path = results.source.path
 
   -- This function encapsulates the actual file writing logic.
   local function do_create_files()
     if vim.fn.filereadable(results.header.path) == 1 or vim.fn.filereadable(results.source.path) == 1 then
-      return on_complete(false, "One or both class files already exist.")
+      return on_exit("One or both class files already exist.", opts)
     end
     local ok_h, err_h = write_file(results.header.path, results.header.content)
     if not ok_h then
-      return on_complete(false, "Failed to write header file: " .. err_h)
+      return on_exit("Failed to write header file: " .. err_h, opts)
     end
     local ok_s, err_s = write_file(results.source.path, results.source.content)
     if not ok_s then
       pcall(os.remove, results.header.path) -- Attempt to clean up
-      return on_complete(false, "Failed to write source file: " .. err_s)
+      return on_exit("Failed to write source file: " .. err_s, opts)
     end
-    on_complete(true, results) -- Success
+    on_complete(results, opts) -- Success
   end
 
   -- Step 4: Decide whether to show confirmation UI or create directly.
@@ -156,7 +193,7 @@ function M.run(opts, on_complete)
     local yes_message = "Yes, create files"
     vim.ui.select({ yes_message, "No, cancel" }, { prompt = prompt_str }, function(choice)
       if not choice or choice ~= yes_message then
-        return on_complete(false, "canceled")
+        return on_cancel("canceled", opts)
       end
       do_create_files()
     end)

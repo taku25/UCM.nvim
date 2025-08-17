@@ -12,19 +12,44 @@ end
 
 local M = {}
 
----
+local function on_complete(result, opts)
+        
+  logger.info("Successfully deleted class files for: " .. result.class_name)
+
+  --ユーザーのコンプリートも呼ぶ
+  if opts.on_comple then
+     opts.on_comple(result)
+  end
+end
+
+local function on_cancel(result, opts)
+  --ユーザーのキャンセルも呼ぶ
+  logger.error("Operation failed: " .. tostring(result))
+  if opts.on_cancel then
+     opts.on_cancel(result)
+  end
+end
+
+local function on_exit(result, opts)
+  --ユーザーのキャンセルも呼ぶ
+  logger.error("Operation failed: " .. tostring(result))
+  if opts.on_exit then
+     opts.on_exit(result)
+  end
+end
+
 -- @param opts table
 -- @param on_complete function: A callback function(ok, result) to be called on completion.
-function M.run(opts, on_complete)
+function M.run(opts)
   local actual_filepath = find_actual_filepath(opts.file_path)
   if not actual_filepath then
     -- 失敗したら即座にコールバックを呼んで終了
-    return on_complete(false, "File not found: " .. opts.file_path)
+    return on_exit("File not found: " .. opts.file_path, opts)
   end
 
   local class_info, err = cmd_core.resolve_class_pair(actual_filepath)
   if not class_info then
-    return on_complete(false, err)
+    return on_exit(err, opts)
   end
 
   local files_to_delete = {}
@@ -32,7 +57,7 @@ function M.run(opts, on_complete)
   if class_info.cpp then table.insert(files_to_delete, class_info.cpp) end
 
   if #files_to_delete == 0 then
-    return on_complete(false, "No existing files found to delete.")
+    return on_exit("No existing files found to delete.", opts)
   end
 
   local prompt_str = string.format("Delete class '%s'?\n\n%s", class_info.class_name, table.concat(files_to_delete, "\n"))
@@ -43,7 +68,7 @@ function M.run(opts, on_complete)
     function(choice)
       if not choice or choice ~= "Yes, permanently delete" then
         -- ユーザーがキャンセルした場合
-        return on_complete(false, "canceled")
+        return on_cancel("canceled", opts)
       end
 
       -- ユーザーが"Yes"を選んだ場合
@@ -53,7 +78,7 @@ function M.run(opts, on_complete)
       end
       
       -- 成功した場合
-      on_complete(true, class_info)
+      on_complete(class_info, opts)
     end
   )
 end

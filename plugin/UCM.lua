@@ -17,12 +17,8 @@ vim.g.loaded_ucm = 1
 ----------------------------------------------------------------------
 local api = require("UCM.api")
 local logger = require("UCM.logger")
-local conf = require("UCM.conf")
-local ui = {
-  new = require("UCMUI.ui.new"),
-  delete = require("UCMUI.ui.delete"),
-  rename = require("UCMUI.ui.rename"),
-}
+local api_ui = require("UCMUI.api")
+
 -- For non-UI commands (:UCM)
 local subcommands = {
   ["new"] = { handler = api.new_class, args = { "class_name", "parent_class", "target_dir" }, required_args = 2, usage = ":UCM new <ClassName> <ParentClassName> [TargetDir]" },
@@ -33,40 +29,10 @@ local subcommands = {
 
 -- For UI-based commands (:UCMUI)
 local ui_subcommands = {
-  ["new"] = { handler = ui.new.create, args = { "target_dir" }, usage = ":UCMUI new" },
-  ["delete"] = { handler = ui.delete.create, args = { "file_path" }, required_args = 0, usage = ":UCMUI delete" }, -- ★ 追加
-  ["rename"] = { handler = ui.rename.create, args = { "file_path" }, required_args = 0, usage = ":UCMUI rename" }, -- ★ 追加}
+  ["new"] = { handler = api_ui.new_class, args = { "target_dir" }, usage = ":UCMUI new" },
+  ["delete"] = { handler = api_ui.delete_class, args = { "file_path" }, required_args = 0, usage = ":UCMUI delete" }, -- ★ 追加
+  ["rename"] = { handler = api_ui.rename_class, args = { "file_path" }, required_args = 0, usage = ":UCMUI rename" }, -- ★ 追加}
 }
-
-local function final_on_complete_handler(cmd_name, opts)
-  return function(ok, result)
-    if ok then
-      local class_name_for_msg = result.class_name or opts.class_name or ""
-      if cmd_name == "new" then
-        logger.info("Successfully created class: " .. class_name_for_msg)
-        logger.info(" -> Template used: " .. result.template_used)
-        logger.info(" -> Header file: " .. result.header_path)
-        logger.info(" -> Source file: " .. result.source_path)
-        local open_setting = conf.active_config.auto_open_on_new
-        if open_setting == "header" and result.header_path then
-          vim.cmd("edit " .. vim.fn.fnameescape(result.header_path))
-        elseif open_setting == "source" and result.source_path then
-          vim.cmd("edit " .. vim.fn.fnameescape(result.source_path))
-        elseif open_setting == "both" and result.header_path and result.source_path then
-          vim.cmd("edit " .. vim.fn.fnameescape(result.header_path)); vim.cmd("vsplit " .. vim.fn.fnameescape(result.source_path))
-        end
-      elseif cmd_name == "delete" then
-        logger.info("Successfully deleted class files for: " .. class_name_for_msg)
-      elseif cmd_name == "rename" then
-        logger.info(string.format("Renamed '%s' to '%s'", class_name_for_msg, opts.new_class_name))
-      end
-    elseif result == "canceled" then
-      logger.info("Operation canceled by user.")
-    else
-      logger.error("Operation failed: " .. tostring(result))
-    end
-  end
-end
 
 ----------------------------------------------------------------------
 -- Main Command Implementation for :UCM (Non-UI)
@@ -107,7 +73,7 @@ vim.api.nvim_create_user_command("UCM", function(cmd_args)
       opts.target_dir = vim.fn.getcwd()
     end
 
-    command_def.handler(opts, final_on_complete_handler(cmd_name_lower, opts))
+    command_def.handler(opts)
   else -- Synchronous commands: switch
     if cmd_name_lower == "switch" then
       opts.current_file_path = vim.api.nvim_buf_get_name(0)
@@ -163,9 +129,9 @@ vim.api.nvim_create_user_command("UCMUI", function(cmd_args)
   end
 
   -- 最後の、統一されたコールバックハンドラを渡して、UIフローを起動する
-  command_def.handler(opts, final_on_complete_handler(cmd_name_lower, opts))
+  command_def.handler(opts)
 end, {
-  nargs = "*", -- ★ 引数を受け取れるように
+  nargs = "*",
   desc = "UCM: Manage classes using interactive UI.",
   complete = function(arg_lead, cmd_line)
     -- (補完機能も、賢く)
