@@ -33,9 +33,9 @@ local subcommands = {
 
 -- For UI-based commands (:UCMUI)
 local ui_subcommands = {
-  ["new"] = { handler = ui.new.create, args = {}, required_args = 0, usage = ":UCMUI new" },
-  ["delete"] = { handler = ui.delete.create, args = {}, required_args = 0, usage = ":UCMUI delete" }, -- ★ 追加
-  ["rename"] = { handler = ui.rename.create, args = {}, required_args = 0, usage = ":UCMUI rename" }, -- ★ 追加}
+  ["new"] = { handler = ui.new.create, args = { "target_dir" }, usage = ":UCMUI new" },
+  ["delete"] = { handler = ui.delete.create, args = { "file_path" }, required_args = 0, usage = ":UCMUI delete" }, -- ★ 追加
+  ["rename"] = { handler = ui.rename.create, args = { "file_path" }, required_args = 0, usage = ":UCMUI rename" }, -- ★ 追加}
 }
 
 local function final_on_complete_handler(cmd_name, opts)
@@ -143,19 +143,37 @@ end, {
 vim.api.nvim_create_user_command("UCMUI", function(cmd_args)
   local user_fargs = cmd_args.fargs
   local subcommand_name = user_fargs[1]
-  if not subcommand_name then logger.info("Usage: :UCMUI <subcommand> ..."); return end
+  if not subcommand_name then logger.info("Usage: :UCMUI <subcommand> [path]"); return end
 
   local cmd_name_lower = subcommand_name:lower()
   local command_def = ui_subcommands[cmd_name_lower]
   if not command_def then logger.error("Unknown UCMUI subcommand: " .. subcommand_name); return end
 
-  command_def.handler(final_on_complete_handler(cmd_name_lower, {}))
+  -- オプションの引数を、optsテーブルに変換する
+  
+  local _unpack = table.unpack or unpack
+  local opts = {}
+  local user_args = {
+    _unpack(user_fargs, 2)
+  }
+  if command_def.args then
+    for i, arg_name in ipairs(command_def.args) do
+      opts[arg_name] = user_args[i]
+    end
+  end
+
+  -- 最後の、統一されたコールバックハンドラを渡して、UIフローを起動する
+  command_def.handler(opts, final_on_complete_handler(cmd_name_lower, opts))
 end, {
-  nargs = "*",
-  desc = "UCM: Manage Unreal Engine classes using interactive UI.",
+  nargs = "*", -- ★ 引数を受け取れるように
+  desc = "UCM: Manage classes using interactive UI.",
   complete = function(arg_lead, cmd_line)
-    return vim.tbl_filter(function(cmd)
-      return vim.startswith(cmd, arg_lead)
-    end, vim.tbl_keys(ui_subcommands))
+    -- (補完機能も、賢く)
+    local parts = vim.split(cmd_line, " ", true)
+    if #parts <= 2 then
+      return vim.tbl_filter(function(cmd) return vim.startswith(cmd, arg_lead) end, vim.tbl_keys(ui_subcommands))
+    else
+      return vim.fn.getcompletion(arg_lead, "file")
+    end
   end,
 })

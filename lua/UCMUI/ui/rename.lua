@@ -6,38 +6,29 @@ local logger = require("UCM.logger")
 
 local M = {}
 
-function M.create()
-  -- Step 1: どのファイルをリネームするか、ユーザーに選ばせる
-  frontend.select_cpp_file(function(selected_file)
-    if not selected_file then
-      logger.info("Rename operation canceled.")
-      return
-    end
+function M.create(opts, on_complete)
+  opts = opts or {}
 
-    -- ★★★ これが、あなたの最後の、そして、最も美しい、哲学です ★★★
-    -- UIレイヤーは、重い解決処理は行わない。
-    -- ただ、ファイル名から、電光石火の速さで、古い名前を取得するだけ。
+  local function start_rename_flow(selected_file)
     local old_name = vim.fn.fnamemodify(selected_file, ":t:r")
-
-    -- Step 2: あなたの完璧なUX設計で、vim.ui.inputを呼び出す
-    vim.ui.input({
-      prompt = "Rename: " .. old_name .. " ->",
-      default = old_name,
-    }, function(new_name)
+    vim.ui.input({ prompt = "Rename: " .. old_name .. " ->", default = old_name }, function(new_name)
       if not new_name or new_name == "" or new_name == old_name then
-        logger.info("Rename operation canceled.")
-        return
+        return on_complete(false, "canceled")
       end
-
-      -- Step 3: 最後の確認と実行は、賢いcmdレイヤーに、すべてを委ねる
-      api.rename_class(
-        { file_path = selected_file, new_class_name = new_name },
-        function(ok, result)
-          -- (結果の表示は、plugin/UCM.luaのコールバックが担当)
-        end
-      )
+      api.rename_class({ file_path = selected_file, new_class_name = new_name }, on_complete)
     end)
-  end)
+  end
+
+  if opts.file_path then
+    start_rename_flow(opts.file_path)
+  else
+    frontend.select_cpp_file(function(selected_file)
+      if not selected_file then
+        return on_complete(false, "canceled")
+      end
+      start_rename_flow(selected_file)
+    end)
+  end
 end
 
 return M
