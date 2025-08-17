@@ -24,7 +24,7 @@ local defaults = {
   template_rules = {
     {
       name = "Actor",
-      priority = 100,
+      priority = 10,
       parent_regex = "^A",
       template_dir = "builtin",
       header_template = "Actor.h.tpl",
@@ -229,13 +229,6 @@ local defaults = {
     },
   },
 
-  folder_rules = {
-    -- 各ルールは、headerとsourceのパス名を明示的に持つ
-    { header = "Public", source = "Private" },
-    { header = "Classes", source = "Sources" },
-    -- ユーザーは、どんな非対称なルールも追加できる
-    -- { header = "Includes", source = "Private" },
-  },
   folder_rules = {
     -- Basic Public <-> Private mapping
     { type = "header",  regex = "^[Pp]ublic$", replacement = "Private" },
