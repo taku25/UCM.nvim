@@ -1,0 +1,429 @@
+*UCM.jax*    For UCM.nvim                          vim: ft=help
+
+==============================================================================
+目次                                                     *UCM-contents*
+
+  1. はじめに..................................... |UCM-introduction|
+  2. 使い方....................................... |UCM-usage|
+     - :UCMUI (UIコマンド)........................ |UCM-commands-ui|
+     - :UCM (ダイレクトコマンド).................. |UCM-commands-direct|
+  3. 設定......................................... |UCM-configuration|
+     - セットアップ............................... |UCM-setup|
+     - プロジェクト固有の設定 (.ucmrc)............ |UCM-ucmrc|
+     - フルコンフィグ............................. |UCM-default-configuration|
+  4. Lua API...................................... |UCM-api|
+     - UCMUI.api (フロントエンド)................. |UCM-api-ui|
+     - UCM.api (コアエンジン)..................... |UCM-api-core|
+  5. 連携サンプル (neo-tree)...................... |UCM-integration-examples|
+  6. ライセンス................................... |UCM-license|
+
+==============================================================================
+1. はじめに                                         *UCM-introduction*
+
+*UCM.nvim* は、Unreal Engine のC++クラス管理（作成、ファイル切り替え、リネーム、
+削除）を、Neovimから快適に行うためのプラグインです。
+
+主な機能:
+- データ駆動設計:
+  プロジェクト固有のフォルダ構造やクラスのルールをLuaテーブルで定義し、
+  柔軟なクラスファイル操作を実現します。
+- UI抽象化レイヤー:
+  Telescope, fzf-lua, またはNeovim標準UIを、環境に応じて自動で選択・使用
+  します。
+- 2つのコマンド体系:
+  対話的な操作のための `:UCMUI` と、スクリプトや自動化のための `:UCM`
+  を提供します。
+- 拡張性の高いAPI:
+  `neo-tree`のようなファイラープラグインと簡単に連携できます。
+
+==============================================================================
+2. 使い方                                                     *UCM-usage*
+
+UCM.nvimは、用途に応じて2種類のコマンドを提供します。
+
+------------------------------------------------------------------------------
+:UCMUI (UIコマンド)                                   *UCM-commands-ui*
+
+人間が対話的にクラスを管理するためのコマンドです。引数は省略可能で、省略された
+場合はUIが起動し、必要な情報を尋ねます。
+
+:UCMUI new [target_dir]
+    UIを使って、対話的に新しいクラスを作成します。
+    `neo-tree`などでディレクトリを選択している状態で実行した場合、その
+    ディレクトリを基準にクラス作成を開始します。
+
+:UCMUI delete [file_path]
+    UIを使って、削除するクラスファイルを選択します。
+    引数でファイルパスが指定された場合、ファイル選択UIをスキップします。
+
+:UCMUI rename [file_path]
+    UIを使って、リネームするクラスファイルを選択し、新しい名前を入力します。
+    引数でファイルパスが指定された場合、ファイル選択UIをスキップします。
+
+------------------------------------------------------------------------------
+:UCM (ダイレクトコマンド)                         *UCM-commands-direct*
+
+スクリプトや自動化から利用することを想定した、UIを介さないコマンドです。
+必要な引数をすべて指定する必要があります。
+
+:UCM new <ClassName> <ParentClass> [TargetDir]
+    新しいクラスを直接作成します。[TargetDir]を省略した場合、カレント
+    ディレクトリが使用されます。
+
+:UCM delete <Relative/Path/To/File>
+    クラスファイルを直接削除します。ヘッダー(.h)とソース(.cpp)の両方が
+    対象となります。拡張子は省略可能です。
+
+:UCM rename <Relative/Path/To/File> <NewName>
+    クラスファイルを直接リネームします。拡張子は省略可能です。
+
+:UCM switch
+    現在開いているファイルがヘッダーであればソースへ、ソースであれば
+    ヘッダーへ切り替えます。
+
+==============================================================================
+3. 設定                                               *UCM-configuration*
+
+------------------------------------------------------------------------------
+セットアップ                                                   *UCM-setup*
+
+`lazy.nvim`を使っている場合、`opts`キーに設定テーブルを渡します。
+
+例:
+>lua
+  require("UCM").setup({
+    ui_frontend = "telescope",
+    confirm_on_new = false,
+  })
+<
+
+利用可能なオプションの詳細は |UCM-default-configuration| を参照してください。
+
+------------------------------------------------------------------------------
+プロジェクト固有の設定 (.ucmrc)                               *UCM-ucmrc*
+
+プロジェクトのルートディレクトリに`.ucmrc`という名前のJSONファイルを作成する
+ことで、グローバルな設定を上書きできます。
+
+`.ucmrc`で設定可能な項目は、|UCM-setup|で説明されているオプションと同じです。
+
+例:
+>json
+  {
+    "default_parent_class": "UObject",
+    "template_rules": [
+      {
+        "name": "MyGameActor",
+        "priority": 200,
+        "parent_regex": "^AMyBaseActor$",
+        "template_dir": "/path/to/my/templates",
+        "header_template": "MyActor.h.tpl",
+        "source_template": "MyActor.cpp.tpl",
+        "class_prefix": "A"
+      }
+    ]
+  }
+<
+
+------------------------------------------------------------------------------
+フルコンフィグ                                   *UCM-default-configuration*
+
+以下は、設定可能なすべてのオプションと、そのデフォルト値です。
+(conf.luaより抜粋)
+>lua
+{
+  -- 使用するUIフロントエンドを選択します
+  -- "auto": Telescope -> fzf-lua -> native の優先順位で自動選択
+  -- "telescope": Telescopeを優先 (fdが必須)
+  -- "fzf-lua": fzf-luaを優先 (fdが必須)
+  -- "native": Neovim標準の vim.ui を使用 (fdは不要)
+  ui_frontend = "auto",
+
+  -- 'new'コマンド成功後、どのファイルを開くか
+  -- "header": ヘッダーファイルのみ開く (デフォルト)
+  -- "source": ソースファイルのみ開く
+  -- "both":   ヘッダーを開き、ソースを縦分割で開く
+  -- false:    何もしない
+  auto_open_on_new = "header",
+
+  -- :UCM new コマンド実行時に、ファイル作成の確認UIを表示するかどうか
+  confirm_on_new = true,
+  
+  -- 親クラスを指定しなかった場合のデフォルト
+  default_parent_class = "Actor",
+
+  -- 新規ファイル作成時のコピーライトヘッダー
+  copyright_header_h = "// Copyright...",
+  copyright_header_cpp = "// Copyright..",
+
+  -- クラス作成のテンプレートルール
+  template_rules = {
+    {
+      name = "Actor",
+      priority = 10,
+      parent_regex = "^A",
+      template_dir = "builtin",
+      header_template = "Actor.h.tpl",
+      source_template = "Actor.cpp.tpl",
+      class_prefix = "A",
+      uclass_specifier = "",
+      base_class_name = "Actor",
+      direct_includes = { '"GameFramework/Actor.h"' },
+    },
+    {
+      name = "Character",
+      priority = 200,
+      parent_regex = "^A.*Character$",
+      template_dir = "builtin",
+      header_template = "Character.h.tpl",
+      source_template = "Character.cpp.tpl",
+      class_prefix = "A",
+      uclass_specifier = "",
+      base_class_name = "Character",
+      direct_includes = { '"GameFramework/Character.h"' },
+    },
+    {
+      name = "PlayerCameraManager",
+      priority = 200,
+      parent_regex = "^APlayerCameraManager$",
+      template_dir = "builtin",
+      header_template = "PlayerCameraManager.h.tpl",
+      source_template = "PlayerCameraManager.cpp.tpl",
+      class_prefix = "A",
+      uclass_specifier = "",
+      base_class_name = "PlayerCameraManager",
+      direct_includes = { '"Camera/PlayerCameraManager.h"' },
+    },
+    {
+      name = "ActorComponent",
+      priority = 100,
+      parent_regex = ".*ActorComponent$",
+      template_dir = "builtin",
+      header_template = "ActorComponent.h.tpl",
+      source_template = "ActorComponent.cpp.tpl",
+      class_prefix = "U",
+      uclass_specifier = "",
+      base_class_name = "ActorComponent",
+      direct_includes = { '"Components/ActorComponent.h"' },
+    },
+    {
+      name = "SceneComponent",
+      priority = 200,
+      parent_regex = ".*SceneComponent$",
+      template_dir = "builtin",
+      header_template = "ActorComponent.h.tpl",
+      source_template = "ActorComponent.cpp.tpl",
+      class_prefix = "U",
+      uclass_specifier = "",
+      base_class_name = "SceneComponent",
+      direct_includes = { '"Components/SceneComponent.h"' },
+    },
+    {
+      name = "BlueprintLibrary",
+      priority = 200,
+      parent_regex = ".*BlueprintFunctionLibrary$",
+      template_dir = "builtin",
+      header_template = "UObject.h.tpl",
+      source_template = "UObject.cpp.tpl",
+      class_prefix = "U",
+      uclass_specifier = "",
+      base_class_name = "BlueprintFunctionLibrary",
+      direct_includes = { '"Kismet/BlueprintFunctionLibrary.h"' },
+    },
+    {
+      name = "GameModeBase",
+      priority = 200,
+      parent_regex = "^AGameModeBase$",
+      template_dir = "builtin",
+      header_template = "UObject.h.tpl",
+      source_template = "UObject.cpp.tpl",
+      class_prefix = "A",
+      uclass_specifier = "",
+      base_class_name = "GameModeBase",
+      direct_includes = { '"GameFramework/GameModeBase.h"' },
+    },
+    {
+      name = "Interface",
+      priority = 200,
+      parent_regex = "^I",
+      template_dir = "builtin",
+      header_template = "Interface.h.tpl",
+      source_template = "Interface.cpp.tpl",
+      class_prefix = "U",
+      uclass_specifier = "MinimalAPI",
+      base_class_name = "Interface",
+      direct_includes = {},
+    },
+    {
+      name = "Object",
+      priority = 1,
+      parent_regex = "^U",
+      template_dir = "builtin",
+      header_template = "UObject.h.tpl",
+      source_template = "UObject.cpp.tpl",
+      class_prefix = "U",
+      uclass_specifier = "",
+      base_class_name = "Object",
+      direct_includes = { '"UObject/Object.h"' },
+    },
+    {
+      name = "Object",
+      priority = 0,
+      parent_regex = ".*",
+      template_dir = "builtin",
+      header_template = "UObject.h.tpl",
+      source_template = "UObject.cpp.tpl",
+      class_prefix = "U",
+      uclass_specifier = "",
+      base_class_name = "Object",
+      direct_includes = { '"UObject/Object.h"' },
+    },
+  },
+
+  -- ヘッダー/ソースのペアリングルール
+  folder_rules = {
+    { type = "header",  regex = "^[Pp]ublic$", replacement = "Private" },
+    { type = "source",  regex = "^[Pp]rivate$", replacement = "Public" },
+    { type = "header",  regex = "^[Cc]lasses$", replacement = "Sources" },
+    { type = "source",  regex = "^[Ss]ources$", replacement = "Classes" },
+  },
+}
+<
+
+==============================================================================
+4. Lua API                                                     *UCM-api*
+
+UCM.nvimは、責務が明確に分離された2つのAPIモジュールを提供します。
+
+------------------------------------------------------------------------------
+UCMUI.api (フロントエンド)                                     *UCM-api-ui*
+
+`neo-tree`のような外部プラグインとの連携に使用することが推奨される、高レベル
+APIです。ユーザーとの対話（UIの表示など）を担当します。
+
+APIモジュールを`require`する:
+>lua
+  local ucm_ui = require("UCMUI.api")
+<
+
+*ucm_ui.new_class({opts})*
+*ucm_ui.delete_class({opts})*
+*ucm_ui.rename_class({opts})*
+    対話的にクラス操作を行います。
+    `opts`テーブル:
+      - `target_dir` (string, optional): `new`で使用。起点ディレクトリ。
+      - `file_path` (string, optional): `delete`/`rename`で使用。対象ファイル。
+      - `on_complete` (function, optional): 成功時のコールバック
+      - `on_cancel` (function, optional): ユーザーキャンセル時のコールバック
+      - `on_exit` (function, optional): 処理失敗時のコールバック
+
+------------------------------------------------------------------------------
+UCM.api (コアエンジン)                                       *UCM-api-core*
+
+UIを一切介さず、ファイル操作などの純粋なバックエンド処理を実行するための
+低レベルAPIです。より細かい制御が必要な場合に使用します。
+
+APIモジュールを`require`する:
+>lua
+  local ucm = require("UCM.api")
+<
+
+*ucm.new_class({opts})*
+    新しいクラスファイルを作成します。
+    `opts`テーブル:
+      - `class_name` (string): (必須)
+      - `parent_class` (string): (必須)
+      - `target_dir` (string): (必須)
+      - `on_complete` (function, optional)
+      - `on_cancel` (function, optional)
+      - `on_exit` (function, optional)
+
+*ucm.delete_class({opts})*
+    クラスファイルを削除します。
+    `opts`テーブル:
+      - `file_path` (string): (必須)
+      - `on_complete` (function, optional)
+      - `on_cancel` (function, optional)
+      - `on_exit` (function, optional)
+
+*ucm.rename_class({opts})*
+    クラスファイルをリネームします。
+    `opts`テーブル:
+      - `file_path` (string): (必須)
+      - `new_class_name` (string): (必須)
+      - `on_complete` (function, optional)
+      - `on_cancel` (function, optional)
+      - `on_exit` (function, optional)
+
+*ucm.switch_file({opts})*
+    ヘッダー/ソースファイルを切り替えます。この関数は同期的です。
+    `opts`テーブル (必須):
+      - `current_file_path` (string)
+    返り値: `(boolean, string|nil)` -- `(ok, err_msg)`
+
+==============================================================================
+5. 連携サンプル (neo-tree)                     *UCM-integration-examples*
+
+`UCMUI.api` を使うことで、`neo-tree`から直接UCM.nvimの機能を呼び出すことが
+できます。
+
+`on_complete`フックを使えば、ファイル操作が成功した後にneo-treeの表示を
+自動で更新する、といった連携も可能です。
+
+例: neo-treeのキーマッピング設定
+>lua
+  -- ... (neo-treeのセットアップ) ...
+  filesystem = {
+    window = {
+      mappings = {
+        ["<leader>n"] = function(state)
+          local node = state.tree:get_node()
+          require("UCMUI.api").new_class({
+            target_dir = node.path,
+            on_complete = function()
+              -- 成功したらtreeをリフレッシュ
+              require("neo-tree.sources.filesystem").refresh(state)
+            end
+          })
+        end,
+        ["<leader>d"] = function(state)
+          local node = state.tree:get_node()
+          require("UCMUI.api").delete_class({ file_path = node.path })
+        end,
+        ["<leader>r"] = function(state)
+          local node = state.tree:get_node()
+          require("UCMUI.api").rename_class({ file_path = node.path })
+        end,
+      },
+    },
+  },
+  -- ...
+<
+
+==============================================================================
+6. ライセンス                                                 *UCM-license*
+
+MIT License
+
+Copyright (c) 2025 taku25
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+==============================================================================
+ vim:tw=78:ts=8:ft=help:norl:
