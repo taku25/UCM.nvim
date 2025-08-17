@@ -8,6 +8,13 @@ local M = {}
 local defaults = {
   ui_frontend = "auto", -- "auto", "telescope", "fzf-lua", "native"
 
+  -- 'new'コマンド成功後、どのファイルを開くか
+  -- "header": ヘッダーファイルのみ開く (デフォルト)
+  -- "source": ソースファイルのみ開く
+  -- "both":   ヘッダーを開き、ソースを縦分割で開く
+  -- false:    何もしない
+  auto_open_on_new = "header",
+
   confirm_on_new = true,
   default_parent_class = "Actor",
 

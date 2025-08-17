@@ -17,6 +17,7 @@ vim.g.loaded_ucm = 1
 ----------------------------------------------------------------------
 local api = require("UCM.api")
 local logger = require("UCM.logger")
+local conf = require("UCM.conf")
 local ui = {
   new = require("UCMUI.ui.new"),
   delete = require("UCMUI.ui.delete"),
@@ -36,6 +37,36 @@ local ui_subcommands = {
   ["delete"] = { handler = ui.delete.create, args = {}, required_args = 0, usage = ":UCMUI delete" }, -- ★ 追加
   ["rename"] = { handler = ui.rename.create, args = {}, required_args = 0, usage = ":UCMUI rename" }, -- ★ 追加}
 }
+
+local function final_on_complete_handler(cmd_name, opts)
+  return function(ok, result)
+    if ok then
+      local class_name_for_msg = result.class_name or opts.class_name or ""
+      if cmd_name == "new" then
+        logger.info("Successfully created class: " .. class_name_for_msg)
+        logger.info(" -> Template used: " .. result.template_used)
+        logger.info(" -> Header file: " .. result.header_path)
+        logger.info(" -> Source file: " .. result.source_path)
+        local open_setting = conf.active_config.auto_open_on_new
+        if open_setting == "header" and result.header_path then
+          vim.cmd("edit " .. vim.fn.fnameescape(result.header_path))
+        elseif open_setting == "source" and result.source_path then
+          vim.cmd("edit " .. vim.fn.fnameescape(result.source_path))
+        elseif open_setting == "both" and result.header_path and result.source_path then
+          vim.cmd("edit " .. vim.fn.fnameescape(result.header_path)); vim.cmd("vsplit " .. vim.fn.fnameescape(result.source_path))
+        end
+      elseif cmd_name == "delete" then
+        logger.info("Successfully deleted class files for: " .. class_name_for_msg)
+      elseif cmd_name == "rename" then
+        logger.info(string.format("Renamed '%s' to '%s'", class_name_for_msg, opts.new_class_name))
+      end
+    elseif result == "canceled" then
+      logger.info("Operation canceled by user.")
+    else
+      logger.error("Operation failed: " .. tostring(result))
+    end
+  end
+end
 
 ----------------------------------------------------------------------
 -- Main Command Implementation for :UCM (Non-UI)
@@ -69,31 +100,14 @@ vim.api.nvim_create_user_command("UCM", function(cmd_args)
 
   logger.info("Executing: " .. cmd_name_lower .. " with opts: " .. vim.inspect(opts))
 
+
   -- Asynchronous commands: new, delete, rename
   if cmd_name_lower == "new" or cmd_name_lower == "delete" or cmd_name_lower == "rename" then
     if cmd_name_lower == "new" and not opts.target_dir then
       opts.target_dir = vim.fn.getcwd()
     end
 
-    local on_complete_callback = function(ok, result)
-      if ok then
-        if cmd_name_lower == "new" then
-          logger.info("Successfully created class: " .. opts.class_name)
-          logger.info(" -> Template used: " .. result.template_used)
-          logger.info(" -> Header file: " .. result.header_path)
-          logger.info(" -> Source file: " .. result.source_path)
-        elseif cmd_name_lower == "delete" then
-          logger.info("Successfully deleted class files for: " .. result.class_name)
-        elseif cmd_name_lower == "rename" then
-          logger.info(string.format("Renamed '%s' to '%s'", result.class_name, opts.new_class_name))
-        end
-      elseif result == "canceled" then
-        logger.info("Operation canceled by user.")
-      else
-        logger.error("Operation failed: " .. tostring(result))
-      end
-    end
-    command_def.handler(opts, on_complete_callback)
+    command_def.handler(opts, final_on_complete_handler(cmd_name_lower, opts))
   else -- Synchronous commands: switch
     if cmd_name_lower == "switch" then
       opts.current_file_path = vim.api.nvim_buf_get_name(0)
@@ -129,19 +143,13 @@ end, {
 vim.api.nvim_create_user_command("UCMUI", function(cmd_args)
   local user_fargs = cmd_args.fargs
   local subcommand_name = user_fargs[1]
-  if not subcommand_name then
-    logger.info("Usage: :UCMUI <subcommand> ...")
-    return
-  end
+  if not subcommand_name then logger.info("Usage: :UCMUI <subcommand> ..."); return end
 
   local cmd_name_lower = subcommand_name:lower()
   local command_def = ui_subcommands[cmd_name_lower]
-  if not command_def then
-    logger.error("Unknown UCMUI subcommand: " .. subcommand_name)
-    return
-  end
+  if not command_def then logger.error("Unknown UCMUI subcommand: " .. subcommand_name); return end
 
-  command_def.handler()
+  command_def.handler(final_on_complete_handler(cmd_name_lower, {}))
 end, {
   nargs = "*",
   desc = "UCM: Manage Unreal Engine classes using interactive UI.",

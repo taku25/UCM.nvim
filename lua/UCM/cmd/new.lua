@@ -143,12 +143,19 @@ function M.run(opts, on_complete)
   -- Step 4: Decide whether to show confirmation UI or create directly.
   local should_confirm = conf.active_config.confirm_on_new
 
-  if not should_confirm then
+ if not should_confirm then
     do_create_files()
   else
-    local prompt_str = string.format("Create new class '%s' in '%s'?", opts.class_name, opts.target_dir)
-    vim.ui.select({ "Yes, create files", "No, cancel" }, { prompt = prompt_str }, function(choice)
-      if not choice or choice ~= "Yes, create files" then
+    -- 最後の責任者として、最もリッチな情報を、ユーザーに提示する
+    local prompt_lines = {
+      "Will create the following files:",
+      results.header_path,
+      results.source_path,
+    }
+    local prompt_str = table.concat(prompt_lines, "\n")
+    local yes_message = "Yes, create files"
+    vim.ui.select({ yes_message, "No, cancel" }, { prompt = prompt_str }, function(choice)
+      if not choice or choice ~= yes_message then
         return on_complete(false, "canceled")
       end
       do_create_files()
