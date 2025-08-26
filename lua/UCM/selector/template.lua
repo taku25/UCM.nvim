@@ -1,11 +1,10 @@
 -- lua/UCM/selector/tpl.lua
-local conf = require("UCM.conf")
 local logger = require("UCM.logger")
 
 local M = {}
 
-function M.select(parent_class)
-  local all_templates = conf.active_config.template_rules
+function M.select(parent_class, conf) -- 第2引数で設定テーブルを受け取る
+  local all_templates = conf.template_rules
   if not all_templates then
     logger.warn("conf.active_config.template_rules is not defined.")
     return nil

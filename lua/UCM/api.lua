@@ -4,6 +4,7 @@ local new_cmd = require("UCM.cmd.new")
 local delete_cmd = require("UCM.cmd.delete")
 local rename_cmd = require("UCM.cmd.rename")
 local switch_cmd = require("UCM.cmd.switch")
+local move_cmd = require("UCM.cmd.move")
 
 local M = {}
 
@@ -19,6 +20,10 @@ end
 
 function M.rename_class(opts)
   rename_cmd.run(opts)
+end
+
+function M.move_class(opts)
+  move_cmd.run(opts)
 end
 
 -- `switch` はUIを使わないので同期のまま

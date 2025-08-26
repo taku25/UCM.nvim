@@ -2,65 +2,64 @@
 
 # Unreal Class Manager 💓 Neovim
 
-<table>
-  <tr>
-   <td><div align=center><img width="100%" alt="UCM New Class Interactive Demo" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-new.png" /></div></td>
-   <td><div align=center><img width="100%" alt="UCM Rename Class Interactive Demo" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-delete.png" /></div></td>
-  </tr>
-</table>
+\<table\>
+  \<tr\>
+   \<td\>\<div align=center\>\<img width="100%" alt="UCM New Class Interactive Demo" src="[https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-new.png](https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-new.png)" /\>\</div\>\</td\>
+   \<td\>\<div align=center\>\<img width="100%" alt="UCM Rename Class Interactive Demo" src="[https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-delete.png](https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-delete.png)" /\>\</div\>\</td\>
+  \</tr\>
+\</table\>
 
-`UCM.nvim` is a plugin for managing your Unreal Engine C++ classes from within Neovim.
-It is designed to work alongside [UBT.nvim](https://github.com/taku25/UBT.nvim) to boost your workflow.
+`UCM.nvim` is a plugin for managing your Unreal Engine C++ classes (creation, file switching, renaming, deletion) from within Neovim.
+Your workflow will be enhanced by using it alongside [UBT.nvim](https://github.com/taku25/UBT.nvim) and [UEP.nvim](https://github.com/taku25/UEP.nvim).
 
-[English](./README.md) | [日本語 (Japanese)](./README_ja.md)
+[English](https://www.google.com/search?q=./README.md) | [日本語 (Japanese)](https://www.google.com/search?q=./README_ja.md)
 
----
+-----
 
 ## ✨ Features
 
-*   **Data-driven Design**:
-    *   Centrally manage project-specific complex folder structures (`Public`/`Private`) and diverse class rules in `conf.lua`.
-    *   Rule-based determination for class creation, renaming, deletion, and switching between source/header files.
-      **Note: All operations are file-system based. Renaming class symbols within the code should be handled by your LSP.**
-*   **UI**:
-    *   For `new`, `rename`, and `delete` commands, UI frontends like [Telescope](https://github.com/nvim-telescope/telescope.nvim) or [fzf-lua](https://github.com/ibhagwan/fzf-lua) are automatically detected and used.
-    *   It's also possible to specify one explicitly. If neither is installed, the native Neovim UI is used as a fallback.
+  * **Data-driven Design**:
+      * Centrally manage project-specific complex folder structures (`Public`/`Private`) and diverse class rules in a configuration file.
+      * Class creation, renaming, deletion, and switching between source/header files are determined based on these rules.
+        **Note: All operations are file-system based. Renaming class symbols within the code should be handled by your LSP.**
+  * **UI**:
+      * For `new`, `rename`, and `delete` commands, UI frontends like [Telescope](https://github.com/nvim-telescope/telescope.nvim) or [fzf-lua](https://github.com/ibhagwan/fzf-lua) are automatically detected and used.
+      * It's also possible to specify one explicitly. If neither is installed, the native Neovim UI is used as a fallback.
 
-<table>
-  <tr>
-   <td>
-   <div align=center>
-   <img width="100%" alt="UCM new gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-new.gif" /><br>
-   <code>:UCMUI new</code> command
-   </div>
-   </td>
-   <td>
-   <div align=center>
-   <img width="100%" alt="UCM rename gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-rename.gif" /><br>
-   <code>:UCMUI rename</code> command
-   </div>
-   </td>
-  </tr>
-</table>
+\<table\>
+  \<tr\>
+   \<td\>
+   \<div align=center\>
+   \<img width="100%" alt="UCM new gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-new.gif" /\>\<br\>
+   \<code\>:UCM new\</code\> command
+   \</div\>
+   \</td\>
+   \<td\>
+   \<div align=center\>
+   \<img width="100%" alt="UCM rename gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-rename.gif" /\>\<br\>
+   \<code\>:UCM rename\</code\> command
+   \</div\>
+   \</td\>
+  \</tr\>
+\</table\>
 
 ## 🔧 Requirements
 
-*   Neovim v0.11.3 or higher
-*   **Optional (Strongly recommended for an enhanced UI experience):**
-    *   [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
-    *   [fzf-lua](https://github.com/ibhagwan/fzf-lua)
-    *   [fd](https://github.com/sharkdp/fd) (**Required when using `Telescope` or `fzf-lua` UI**)
+  * Neovim v0.11.3 or higher
+  * **Optional (Strongly recommended for an enhanced UI experience):**
+      * [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
+      * [fzf-lua](https://github.com/ibhagwan/fzf-lua)
+      * [fd](https://github.com/sharkdp/fd) (**Required when using `Telescope` or `fzf-lua` UI**)
 
 ## 🚀 Installation
 
-Install using your favorite plugin manager.
-
-### [lazy.nvim](https://github.com/folke/lazy.nvim)
+Example configuration for [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 return {
   'taku25/UCM.nvim',
   dependencies = {
+    "taku25/UNL.nvim", -- Required!
     -- Either one
     "nvim-telescope/telescope.nvim", -- optional
     "ibhagwan/fzf-lua", -- optional
@@ -73,8 +72,7 @@ return {
 
 ## ⚙️ Configuration
 
-You can customize the plugin's behavior by passing a table to the `opts` field in `lazy.nvim`.
-The following shows all available options with their default values.
+You can customize the plugin's behavior by passing a table to the `opts` field.
 
 ```lua
 opts = {
@@ -128,56 +126,49 @@ opts = {
 
 ## ⚡ Usage
 
-`UCM.nvim` provides two sets of commands.
+### 1\. `:UCM`
 
-### 1. `:UCMUI` (Interactive UI Commands)
-
-Commands for managing classes interactively.
-
-```viml
-:UCMUI new      " Interactively create a new class using a UI
-:UCMUI delete   " Select a class file to delete using a UI
-:UCMUI rename   " Select a class file to rename and enter a new name using a UI
-```
-
-### 2. `:UCM` (Direct Commands)
-
-Commands that take full arguments without a UI, intended for scripting and automation.
+If no arguments are provided, a UI will be launched.
 
 ```viml
 :UCM new <ClassName> <ParentClass> [TargetDir] " Directly create a new class
 :UCM delete <Relative/Path/To/File>           " Directly delete a class file (extension is optional)
 :UCM rename <Relative/Path/To/File> <NewName> " Directly rename a class file (extension is optional)
+:UCM move <Source/File/Path> <Target/Dir>    " Move a class to a new directory
 :UCM switch                                   " Switch between header/source
 ```
 
 ## 🤖 API & Automation Examples
 
-You can use the `UCM.api` and `UCMUI.api` modules to integrate with file explorers like `Neo-tree`.
-For all APIs, please check the documentation via `:help ucm`.
+You can use the `UCM.api` module to integrate with file explorers like `Neo-tree`.
+Please check the documentation for all APIs.
+
+```viml
+:help ucm
+```
 
 ### 🌲 Create, delete, and rename classes from Neo-tree
 
 ```lua
--- Example Neo-tree config
 opts = {
   close_if_last_window  = true,
+  -- Example Neo-tree key mapping settings
   filesystem = {
     use_libuv_file_watcher = true,
     window = {
       mappings = {
         ["<leader>n"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").new_class({ target_dir = node.path })
+          require("UCM.api").new_class({ target_dir = node.path })
         end,
         ["<leader>d"] = function(state)
           -- Just pass the path from Neo-tree as an argument!
           local node = state.tree:get_node()
-          require("UCMUI.api").delete_class({ file_path = node.path })
+          require("UCM.api").delete_class({ file_path = node.path })
         end,
         ["<leader>r"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").rename_class({ file_path = node.path })
+          require("UCM.api").rename_class({ file_path = node.path })
         end,
       },
     },
@@ -186,6 +177,7 @@ opts = {
 ```
 
 ## 📜 License
+
 MIT License
 
 Copyright (c) 2025 taku25

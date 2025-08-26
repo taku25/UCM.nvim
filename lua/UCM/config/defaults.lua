@@ -1,12 +1,18 @@
--- lua/UCM/conf.lua
+-- lua/UCM/config/defaults.lua (UCMのデフォルト設定)
+-- UNLのデフォルト設定とマージされます。
+local M = {
+  logging = {
+    level = "info",
+    echo = { level = "warn" },
+    notify = { level = "error", prefix = "[UCM]" },
+    file = { enable = true, max_kb = 512, rotate = 3, filename = "ucm.log" },
+    perf = { enabled = false, patterns = { "^refresh" }, level = "trace" },
+  },
+  cache = { dirname = "UCM" },
+  project = {
+    localrc_filename = ".ucmrc",
+  },
 
-local M = {}
-
-----------------------------------------------------------------------
--- 1. Default Configuration Options
-----------------------------------------------------------------------
-local defaults = {
-  ui_frontend = "auto", -- "auto", "telescope", "fzf-lua", "native"
 
   -- 'new'コマンド成功後、どのファイルを開くか
   -- "header": ヘッダーファイルのみ開く (デフォルト)
@@ -241,152 +247,5 @@ local defaults = {
     -- { regex = "^Private$", replacement = "Headers" },
   },
 }
-
-M.active_config = {}
-M.user_config = {}
-
-----------------------------------------------------------------------
--- 2. Helper Functions for Configuration Merging
-----------------------------------------------------------------------
-
---- Deeply merges two tables, handling nested tables.
--- This is similar to vim.tbl_deep_extend("force"), but specifically tailored
--- for merging configuration objects with default values.
--- @param base_table table: The base table to merge into.
--- @param new_table table: The table with new values to merge from.
--- @return table: The deeply merged table.
-local function deep_merge_tables(base_table, new_table)
-  -- (This function is now safe, as it will only be called with tables)
-  base_table = base_table or {}
-  new_table = new_table or {}
-  local merged = vim.deepcopy(base_table)
-  for k, v in pairs(new_table) do
-    if type(v) == "table" and type(merged[k]) == "table" then
-      merged[k] = deep_merge_tables(merged[k], v)
-    else
-      merged[k] = v
-    end
-  end
-  return merged
-end
-
---- Merges two lists of rules (tables with a 'name' field) by name.
--- New rules with matching names overwrite base rules, and nested tables
--- within rules (like 'properties' or 'tokens') are deeply merged.
--- @param base_rules table: The base list of rules.
--- @param new_rules table: The new list of rules to merge in.
--- @return table: The merged list of rules.
-local function merge_rules_by_name(base_rules, new_rules)
-  base_rules = base_rules or {}
-  new_rules = new_rules or {}
-
-  if #new_rules == 0 then return base_rules end
-
-  local by_name = {}
-  -- Map base rules by name
-  for _, r in ipairs(base_rules) do
-    if r.name then by_name[r.name] = r end
-  end
-  
-  -- Overwrite/add new rules, performing deep merge for nested tables
-  for _, r in ipairs(new_rules) do
-    if r.name then
-      local existing_rule = by_name[r.name]
-      if existing_rule then
-        -- Deep merge properties and tokens
-        r.properties = deep_merge_tables(existing_rule.properties, r.properties)
-        r.tokens = deep_merge_tables(existing_rule.tokens, r.tokens)
-        by_name[r.name] = r
-      else
-        by_name[r.name] = r
-      end
-    end
-  end
-  
-  -- Reconstruct the list, preserving original order for base rules
-  -- and appending new rules. This part can be complex if strict order matters.
-  -- For simplicity, we'll just reconstruct based on the map.
-  local final_merged = {}
-  -- Add rules from base_rules that weren't overwritten
-  for _, r in ipairs(base_rules) do
-      if r.name and by_name[r.name] then
-          table.insert(final_merged, by_name[r.name])
-          by_name[r.name] = nil -- Mark as added
-      end
-  end
-  -- Add any remaining new rules
-  for _, r in ipairs(new_rules) do
-      if r.name and by_name[r.name] then -- Check if it's a new rule not already added
-          table.insert(final_merged, by_name[r.name])
-          by_name[r.name] = nil -- Mark as added
-      end
-  end
-
-  -- If order doesn't strictly matter and just unique names, simpler:
-  -- local final_merged_unordered = {}
-  -- for _, r in pairs(by_name) do table.insert(final_merged_unordered, r) end
-  -- return final_merged_unordered
-
-  return final_merged
-end
-
---- Looks for and loads a `.ucmrc` file from the project root.
--- (This function remains unchanged from your previous implementation)
-local function load_project_config(root_dir)
-  -- ... (Your existing implementation) ...
-  local config_file_path = root_dir .. "/" .. ".ucmrc"
-  if vim.fn.filereadable(config_file_path) ~= 1 then return {}, nil end
-
-  local read_ok, file_content_lines = pcall(vim.fn.readfile, config_file_path)
-  if not read_ok or not file_content_lines then
-    return nil, "UCM: Failed to read .ucmrc file: " .. tostring(file_content_lines)
-  end
-
-  local json_string = table.concat(file_content_lines, "\n")
-  local decode_ok, decoded_json = pcall(vim.fn.json_decode, json_string)
-  if not decode_ok or type(decoded_json) ~= "table" then
-    return nil, "UCM: Invalid JSON in .ucmrc file: " .. tostring(decoded_json)
-  end
-  return decoded_json, nil
-end
-
-----------------------------------------------------------------------
--- 3. Core Configuration Functions
-----------------------------------------------------------------------
-
-function M.load_config(root_dir)
-  local new_config = vim.deepcopy(defaults)
-
-  -- Combine user_config and project_config into a single table to process
-  local project_conf, _ = load_project_config(root_dir)
-  local configs_to_merge = { M.user_config, project_conf }
-
-  for _, conf_table in ipairs(configs_to_merge) do
-    if conf_table then
-      for k, v in pairs(conf_table) do
-        -- ★★★ これが、あなたの最後のバグを修正する、最終的なロジックです ★★★
-        if k == "template_rules" or k == "include_rules" then
-          new_config[k] = merge_rules_by_name(new_config[k], v)
-        elseif type(v) == "table" and type(new_config[k]) == "table" and k ~= "folder_rules" then
-          -- If both the default and user value are tables, deep merge them.
-          new_config[k] = deep_merge_tables(new_config[k], v)
-        else
-          -- For simple values (string, boolean, number) or folder_rules, just overwrite.
-          new_config[k] = v
-        end
-      end
-    end
-  end
-
-  M.active_config = new_config
-end
-
-function M.setup(opts)
-  M.user_config = opts or {}
-  M.load_config(vim.fn.getcwd())
-end
-
--- Initial load of configuration when the module is first required.
-M.setup({})
 
 return M

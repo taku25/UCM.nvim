@@ -1,111 +1,91 @@
-*UCM.txt*         For UCM.nvim                          vim: ft=help
+*UCM.jax* For UCM.nvim                          vim: ft=help
 
 ==============================================================================
 CONTENTS                                                 *UCM-contents*
 
   1. Introduction................................. |UCM-introduction|
   2. Usage........................................ |UCM-usage|
-     - :UCMUI (UI Commands)....................... |UCM-commands-ui|
-     - :UCM (Direct Commands)..................... |UCM-commands-direct|
+     - :UCM (Commands)............................ |UCM-commands-direct|
   3. Configuration................................ |UCM-configuration|
      - Setup...................................... |UCM-setup|
-     - Project-Specific Settings (.ucmrc)......... |UCM-ucmrc|
-     - Full Default Configuration................. |UCM-default-configuration|
+     - Project-specific Settings (.ucmrc)......... |UCM-ucmrc|
+     - Full Configuration......................... |UCM-default-configuration|
   4. Lua API...................................... |UCM-api|
-     - UCMUI.api (Frontend)....................... |UCM-api-ui|
      - UCM.api (Core Engine)...................... |UCM-api-core|
   5. Integration Examples (neo-tree).............. |UCM-integration-examples|
   6. License...................................... |UCM-license|
 
 ==============================================================================
-1. INTRODUCTION                                     *UCM-introduction*
+1. Introduction                                     *UCM-introduction*
 
 *UCM.nvim* is a plugin for comfortably managing Unreal Engine C++ classes
-(creating, switching, renaming, deleting) from within Neovim.
+(creating, switching files, renaming, deleting) from within Neovim.
 
 Main Features:
-- Data-Driven Design:
+- Data-driven Design:
   Define project-specific folder structures and class rules in a Lua table
   to enable flexible class file operations.
 - UI Abstraction Layer:
-  Automatically selects and uses Telescope, fzf-lua, or the native Neovim UI
-  based on your environment.
-- Two Command Systems:
-  Provides `:UCMUI` for interactive operations and `:UCM` for scripting and
-  automation.
+  Automatically selects and uses Telescope, fzf-lua, or the native Neovim
+  UI depending on your environment.
 - Extensible API:
-  Easily integrates with file explorer plugins like `neo-tree`.
+  Easily integrates with filer plugins like `neo-tree`.
 
 ==============================================================================
-2. USAGE                                                      *UCM-usage*
+2. Usage                                                      *UCM-usage*
 
-UCM.nvim provides two types of commands for different use cases.
-
-------------------------------------------------------------------------------
-:UCMUI (UI Commands)                                  *UCM-commands-ui*
-
-Commands for managing classes interactively as a human user. Arguments are
-optional; if omitted, a UI will launch to ask for the necessary information.
-
-:UCMUI new [target_dir]
-    Interactively creates a new class using a UI. If executed while a
-    directory is selected in `neo-tree`, it will start the class creation
-    process from that directory.
-
-:UCMUI delete [file_path]
-    Selects a class file to delete using a UI. If a file path is provided as
-    an argument, the file selection UI is skipped.
-
-:UCMUI rename [file_path]
-    Selects a class file to rename and prompts for a new name using a UI.
-    If a file path is provided, the file selection UI is skipped.
+If a command is run without the required arguments, a UI picker will
+automatically be launched to interactively gather the needed information.
 
 ------------------------------------------------------------------------------
-:UCM (Direct Commands)                            *UCM-commands-direct*
+:UCM (Commands)                                 *UCM-commands-direct*
 
-Commands intended for use in scripts or automation, which do not involve a UI.
-All required arguments must be provided.
+These commands can be used directly by providing all arguments, which is ideal
+for scripting and automation. If arguments are omitted, a UI will be launched.
 
 :UCM new <ClassName> <ParentClass> [TargetDir]
-    Directly creates a new class. If [TargetDir] is omitted, the current
-    working directory is used.
+    Creates a new class. If [TargetDir] is omitted, the current
+    directory is used.
 
 :UCM delete <Relative/Path/To/File>
-    Directly deletes class files. This targets both the header (.h) and
-    source (.cpp) files. The file extension is optional.
+    Deletes a class file. Both the header (.h) and source (.cpp) will be
+    targeted. The file extension is optional.
 
 :UCM rename <Relative/Path/To/File> <NewName>
-    Directly renames class files. The file extension is optional.
+    Renames a class file. The file extension is optional.
+
+:UCM move <Source/File/Path> <Target/Directory>
+    Moves a class file to a new directory. The file extension is optional.
 
 :UCM switch
-    Switches between the header and source file. If the current file is a
-    header, it opens the source, and vice versa.
+    If the current file is a header, switches to the source. If it's a
+    source, switches to the header.
 
 ==============================================================================
-3. CONFIGURATION                                      *UCM-configuration*
+3. Configuration                                       *UCM-configuration*
 
 ------------------------------------------------------------------------------
-SETUP                                                      *UCM-setup*
+Setup                                                          *UCM-setup*
 
-If you are using `lazy.nvim`, pass your configuration table to the `opts` key.
+If you are using `lazy.nvim`, pass a configuration table to the `opts` key.
 
 Example:
 >lua
   require("UCM").setup({
-    ui_frontend = "telescope",
+    ui { picker { mode = "auto", }, },
     confirm_on_new = false,
   })
 <
 
-For details on all available options, see |UCM-default-configuration|.
+For details on available options, see |UCM-default-configuration|.
 
 ------------------------------------------------------------------------------
-PROJECT-SPECIFIC SETTINGS (.ucmrc)                        *UCM-ucmrc*
+Project-specific Settings (.ucmrc)                       *UCM-ucmrc*
 
-You can override global settings by creating a JSON file named `.ucmrc` in
-your project's root directory.
+You can override the global configuration by creating a JSON file named
+`.ucmrc` in the root directory of your project.
 
-The options configurable in `.ucmrc` are the same as those explained in
+The options configurable in `.ucmrc` are the same as those described in
 |UCM-setup|.
 
 Example:
@@ -127,37 +107,43 @@ Example:
 <
 
 ------------------------------------------------------------------------------
-FULL DEFAULT CONFIGURATION                   *UCM-default-configuration*
+Full Configuration                           *UCM-default-configuration*
 
-The following are all available options with their default values.
-(Excerpt from conf.lua)
+The following are all configurable options with their default values.
+
 >lua
 {
-  -- Select the UI frontend to use.
-  -- "auto": Automatically selects in order of priority: Telescope -> fzf-lua -> native
+  -- Select the UI frontend to use
+  -- "auto": Automatically selects in the order of priority: Telescope -> fzf-lua -> native
   -- "telescope": Prioritizes Telescope (requires fd)
   -- "fzf-lua": Prioritizes fzf-lua (requires fd)
-  -- "native": Uses the standard Neovim vim.ui (fd is not required)
-  ui_frontend = "auto",
+  -- "native": Uses the standard vim.ui (fd is not required)
+  
+  ui = {
+    picker = {
+      mode = "auto",
+      prefer = { "telescope", "fzf_lua", "native", "dummy" },
+    },
+  }
 
-  -- Which file(s) to open after a successful 'new' command.
+  -- Which file to open after a successful 'new' command
   -- "header": Open only the header file (default)
   -- "source": Open only the source file
-  -- "both":   Open the header, then vsplit the source
+  -- "both":   Open the header and vsplit the source
   -- false:    Do nothing
   auto_open_on_new = "header",
 
-  -- Whether to show a confirmation UI before creating files with :UCM new.
+  -- Whether to show a confirmation UI when running the :UCM new command
   confirm_on_new = true,
   
-  -- The default parent class to use if not specified.
+  -- Default parent class if not specified
   default_parent_class = "Actor",
 
-  -- Copyright headers for new files.
+  -- Copyright header for new files
   copyright_header_h = "// Copyright...",
   copyright_header_cpp = "// Copyright..",
 
-  -- Template rules for class creation.
+  -- Template rules for class creation
   template_rules = {
     {
       name = "Actor",
@@ -171,36 +157,11 @@ The following are all available options with their default values.
       base_class_name = "Actor",
       direct_includes = { '"GameFramework/Actor.h"' },
     },
-    {
-      name = "Character",
-      priority = 200,
-      parent_regex = "^A.*Character$",
-      template_dir = "builtin",
-      header_template = "Character.h.tpl",
-      source_template = "Character.cpp.tpl",
-      class_prefix = "A",
-      uclass_specifier = "",
-      base_class_name = "Character",
-      direct_includes = { '"GameFramework/Character.h"' },
-    },
-    -- ... (and many other built-in template rules) ...
-    {
-      name = "Object",
-      priority = 0,
-      parent_regex = ".*",
-      template_dir = "builtin",
-      header_template = "UObject.h.tpl",
-      source_template = "UObject.cpp.tpl",
-      class_prefix = "U",
-      uclass_specifier = "",
-      base_class_name = "Object",
-      direct_includes = { '"UObject/Object.h"' },
-    },
+    -- ... more rules
   },
 
-  -- Pairing rules for header/source files.
+  -- Rules for pairing header/source files
   folder_rules = {
-    -- Basic Public <-> Private mapping
     { type = "header",  regex = "^[Pp]ublic$", replacement = "Private" },
     { type = "source",  regex = "^[Pp]rivate$", replacement = "Public" },
     { type = "header",  regex = "^[Cc]lasses$", replacement = "Sources" },
@@ -210,37 +171,16 @@ The following are all available options with their default values.
 <
 
 ==============================================================================
-4. LUA API                                                     *UCM-api*
+4. Lua API                                                     *UCM-api*
 
-UCM.nvim provides two API modules with a clear separation of concerns.
-
-------------------------------------------------------------------------------
-UCMUI.api (Frontend)                                         *UCM-api-ui*
-
-This is the high-level API recommended for integration with other plugins like
-`neo-tree`. It is responsible for all user interaction (e.g., displaying UIs).
-
-Require the API module:
->lua
-  local ucm_ui = require("UCMUI.api")
-<
-
-*ucm_ui.new_class({opts})*
-*ucm_ui.delete_class({opts})*
-*ucm_ui.rename_class({opts})*
-    Performs class operations interactively.
-    `opts` table:
-      - `target_dir` (string, optional): For `new`. The starting directory.
-      - `file_path` (string, optional): For `delete`/`rename`. The target file.
-      - `on_complete` (function, optional): Callback on success.
-      - `on_cancel` (function, optional): Callback on user cancellation.
-      - `on_exit` (function, optional): Callback on failure.
+Depending on the arguments provided, *UCM.nvim* will automatically launch a UI
+picker.
 
 ------------------------------------------------------------------------------
-UCM.api (Core Engine)                                       *UCM-api-core*
+UCM.api (Core Engine)                                     *UCM-api-core*
 
-This is the low-level API for performing pure backend operations like file
-manipulation without any UI. Use this when you need finer control.
+This is a low-level API for executing pure backend processes like file
+operations without any UI. Use this when you need finer control.
 
 Require the API module:
 >lua
@@ -281,14 +221,12 @@ Require the API module:
     Returns: `(boolean, string|nil)` -- `(ok, err_msg)`
 
 ==============================================================================
-5. INTEGRATION EXAMPLES (neo-tree)             *UCM-integration-examples*
+5. Integration Examples (neo-tree)         *UCM-integration-examples*
 
-Using `UCMUI.api`, you can call UCM.nvim's features directly from `neo-tree`.
-
-With the `on_complete` hook, you can create integrations such as automatically
+By using the `on_complete` hook, you can perform actions like automatically
 refreshing the neo-tree view after a successful file operation.
 
-Example: neo-tree keymappings
+Example: key mapping settings for neo-tree
 >lua
   -- ... (in your neo-tree setup) ...
   filesystem = {
@@ -296,7 +234,7 @@ Example: neo-tree keymappings
       mappings = {
         ["<leader>n"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").new_class({
+          require("UCM.api").new_class({
             target_dir = node.path,
             on_complete = function()
               -- Refresh the tree on success
@@ -306,11 +244,11 @@ Example: neo-tree keymappings
         end,
         ["<leader>d"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").delete_class({ file_path = node.path })
+          require("UCM.api").delete_class({ file_path = node.path })
         end,
         ["<leader>r"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").rename_class({ file_path = node.path })
+          require("UCM.api").rename_class({ file_path = node.path })
         end,
       },
     },
@@ -319,7 +257,7 @@ Example: neo-tree keymappings
 <
 
 ==============================================================================
-6. LICENSE                                                    *UCM-license*
+6. License                                                *UCM-license*
 
 MIT License
 
@@ -342,6 +280,5 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
 ==============================================================================
  vim:tw=78:ts=8:ft=help:norl:

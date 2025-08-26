@@ -1,145 +1,69 @@
--- lua/plugin/UCM.lua
+-- plugin/ucm.lua (UNL.command.builderによるコマンド定義)
 
--- Guard: Ensure minimum Neovim version
-if 1 ~= vim.fn.has "nvim-0.11.3" then
-  vim.api.nvim_err_writeln "UCM.nvim requires at least nvim-0.11.3"
-  return
-end
+local builder = require("UNL.command.builder")
+local ucm_api = require("UCM.api")
 
--- Guard: Prevent the file from being loaded more than once
-if vim.g.loaded_ucm == 1 then
-  return
-end
-vim.g.loaded_ucm = 1
+-- :UCMコマンドの定義
+builder.create({
+  plugin_name = "UCM",
+  cmd_name = "UCM",
+  desc = "UCM: Unreal Class Manager commands", -- コマンドの説明
 
-----------------------------------------------------------------------
--- Module Imports
-----------------------------------------------------------------------
-local api = require("UCM.api")
-local logger = require("UCM.logger")
-local api_ui = require("UCMUI.api")
+  subcommands = {
+    ["new"] = {
+      handler = function(opts) ucm_api.new_class(opts) end,
+      desc = "Create a new class, interactively if args are omitted.",
+      args = {
+        -- :UCM new MyClass AActor
+        { name = "class_name", required = false },
+        { name = "parent_class", required = false },
+        -- :UCM new MyClass AActor Source/MyModule/Private
+        { name = "target_dir", required = false },
+      },
+    },
 
--- For non-UI commands (:UCM)
-local subcommands = {
-  ["new"] = { handler = api.new_class, args = { "class_name", "parent_class", "target_dir" }, required_args = 2, usage = ":UCM new <ClassName> <ParentClassName> [TargetDir]" },
-  ["delete"] = { handler = api.delete_class, args = { "file_path" }, required_args = 1, usage = ":UCM delete <Relative/Path/To/File>" },
-  ["rename"] = { handler = api.rename_class, args = { "file_path", "new_class_name" }, required_args = 2, usage = ":UCM rename <Relative/Path/To/File> <NewClassName>" },
-  ["switch"] = { handler = api.switch_file, args = {}, required_args = 0, usage = ":UCM switch" },
-}
+    ["delete"] = {
+      handler = function(opts) ucm_api.delete_class(opts) end,
+      desc = "Delete a class, interactively if file path is omitted.",
+      args = {
+        -- :UCM delete Source/MyModule/Public/MyClass.h
+        { name = "file_path", required = false },
+      },
+    },
 
--- For UI-based commands (:UCMUI)
-local ui_subcommands = {
-  ["new"] = { handler = api_ui.new_class, args = { "target_dir" }, usage = ":UCMUI new" },
-  ["delete"] = { handler = api_ui.delete_class, args = { "file_path" }, required_args = 0, usage = ":UCMUI delete" }, -- ★ 追加
-  ["rename"] = { handler = api_ui.rename_class, args = { "file_path" }, required_args = 0, usage = ":UCMUI rename" }, -- ★ 追加}
-}
+    ["move"] = {
+      handler = function(opts) ucm_api.move_class(opts) end,
+      desc = "Move a class, interactively if file path is omitted.",
+      args = {
+        -- :UCM delete Source/MyModule/Public/MyClass.h
+        { name = "file_path ", required = false },
+        { name = "target_dir ", required = false },
+      },
+    },
 
-----------------------------------------------------------------------
--- Main Command Implementation for :UCM (Non-UI)
-----------------------------------------------------------------------
-vim.api.nvim_create_user_command("UCM", function(cmd_args)
-  local user_fargs = cmd_args.fargs
-  local subcommand_name = user_fargs[1]
-  if not subcommand_name then
-    logger.info("Usage: :UCM <subcommand> ...")
-    return
-  end
+    ["rename"] = {
+      handler = function(opts) ucm_api.rename_class(opts) end,
+      desc = "Rename a class, interactively if args are omitted.",
+      args = {
+        -- :UCM rename Source/MyModule/Public/MyClass.h MyNewClassName
+        { name = "file_path", required = false },
+        { name = "new_class_name", required = false },
+      },
+    },
 
-  local cmd_name_lower = subcommand_name:lower()
-  local command_def = subcommands[cmd_name_lower]
-  if not command_def then
-    logger.error("Unknown UCM subcommand: " .. subcommand_name)
-    return
-  end
-
-  local _unpack = table.unpack or unpack
-  local user_args = { _unpack(user_fargs, 2) }
-  if #user_args < command_def.required_args then
-    logger.error("Missing arguments. Usage: " .. command_def.usage)
-    return
-  end
-
-  local opts = {}
-  for i, arg_name in ipairs(command_def.args) do
-    opts[arg_name] = user_args[i]
-  end
-
-  logger.info("Executing: " .. cmd_name_lower .. " with opts: " .. vim.inspect(opts))
-
-
-  -- Asynchronous commands: new, delete, rename
-  if cmd_name_lower == "new" or cmd_name_lower == "delete" or cmd_name_lower == "rename" then
-    if cmd_name_lower == "new" and not opts.target_dir then
-      opts.target_dir = vim.fn.getcwd()
-    end
-
-    command_def.handler(opts)
-  else -- Synchronous commands: switch
-    if cmd_name_lower == "switch" then
-      opts.current_file_path = vim.api.nvim_buf_get_name(0)
-      if not opts.current_file_path or opts.current_file_path == "" then
-        logger.error("Cannot switch: Not in a file buffer.")
-        return
-      end
-    end
-
-    local ok, result = command_def.handler(opts)
-    if not ok then
-      logger.error("Operation failed: " .. tostring(result))
-    end
-  end
-end, {
-  nargs = "*",
-  desc = "UCM: Manage Unreal Engine classes directly.",
-  complete = function(arg_lead, cmd_line)
-    local parts = vim.split(cmd_line, " ", true)
-    if #parts <= 2 then
-      return vim.tbl_filter(function(cmd)
-        return vim.startswith(cmd, arg_lead)
-      end, vim.tbl_keys(subcommands))
-    else
-      return vim.fn.getcompletion(arg_lead, "file")
-    end
-  end,
-})
-
-----------------------------------------------------------------------
--- Main Command Implementation for :UCMUI (UI-based)
-----------------------------------------------------------------------
-vim.api.nvim_create_user_command("UCMUI", function(cmd_args)
-  local user_fargs = cmd_args.fargs
-  local subcommand_name = user_fargs[1]
-  if not subcommand_name then logger.info("Usage: :UCMUI <subcommand> [path]"); return end
-
-  local cmd_name_lower = subcommand_name:lower()
-  local command_def = ui_subcommands[cmd_name_lower]
-  if not command_def then logger.error("Unknown UCMUI subcommand: " .. subcommand_name); return end
-
-  -- オプションの引数を、optsテーブルに変換する
-  
-  local _unpack = table.unpack or unpack
-  local opts = {}
-  local user_args = {
-    _unpack(user_fargs, 2)
-  }
-  if command_def.args then
-    for i, arg_name in ipairs(command_def.args) do
-      opts[arg_name] = user_args[i]
-    end
-  end
-
-  -- 最後の、統一されたコールバックハンドラを渡して、UIフローを起動する
-  command_def.handler(opts)
-end, {
-  nargs = "*",
-  desc = "UCM: Manage classes using interactive UI.",
-  complete = function(arg_lead, cmd_line)
-    -- (補完機能も、賢く)
-    local parts = vim.split(cmd_line, " ", true)
-    if #parts <= 2 then
-      return vim.tbl_filter(function(cmd) return vim.startswith(cmd, arg_lead) end, vim.tbl_keys(ui_subcommands))
-    else
-      return vim.fn.getcompletion(arg_lead, "file")
-    end
-  end,
+    ["switch"] = {
+      handler = function()
+        -- switchは常に現在のバッファを対象とするため引数なし
+        local current_file = vim.api.nvim_buf_get_name(0)
+        if current_file and current_file ~= "" then
+          ucm_api.switch_file({ current_file_path = current_file })
+        else
+          require("UCM.logger").get().warn("No file open in current buffer to switch.")
+        end
+      end,
+      desc = "Switch between header and source file.",
+      -- このコマンドは引数を取らない
+      args = {},
+    },
+  },
 })

@@ -5,14 +5,12 @@
 
   1. はじめに..................................... |UCM-introduction|
   2. 使い方....................................... |UCM-usage|
-     - :UCMUI (UIコマンド)........................ |UCM-commands-ui|
-     - :UCM (ダイレクトコマンド).................. |UCM-commands-direct|
+     - :UCM (コマンド)............................ |UCM-commands-direct|
   3. 設定......................................... |UCM-configuration|
      - セットアップ............................... |UCM-setup|
      - プロジェクト固有の設定 (.ucmrc)............ |UCM-ucmrc|
      - フルコンフィグ............................. |UCM-default-configuration|
   4. Lua API...................................... |UCM-api|
-     - UCMUI.api (フロントエンド)................. |UCM-api-ui|
      - UCM.api (コアエンジン)..................... |UCM-api-core|
   5. 連携サンプル (neo-tree)...................... |UCM-integration-examples|
   6. ライセンス................................... |UCM-license|
@@ -30,9 +28,6 @@
 - UI抽象化レイヤー:
   Telescope, fzf-lua, またはNeovim標準UIを、環境に応じて自動で選択・使用
   します。
-- 2つのコマンド体系:
-  対話的な操作のための `:UCMUI` と、スクリプトや自動化のための `:UCM`
-  を提供します。
 - 拡張性の高いAPI:
   `neo-tree`のようなファイラープラグインと簡単に連携できます。
 
@@ -42,26 +37,7 @@
 UCM.nvimは、用途に応じて2種類のコマンドを提供します。
 
 ------------------------------------------------------------------------------
-:UCMUI (UIコマンド)                                   *UCM-commands-ui*
-
-人間が対話的にクラスを管理するためのコマンドです。引数は省略可能で、省略された
-場合はUIが起動し、必要な情報を尋ねます。
-
-:UCMUI new [target_dir]
-    UIを使って、対話的に新しいクラスを作成します。
-    `neo-tree`などでディレクトリを選択している状態で実行した場合、その
-    ディレクトリを基準にクラス作成を開始します。
-
-:UCMUI delete [file_path]
-    UIを使って、削除するクラスファイルを選択します。
-    引数でファイルパスが指定された場合、ファイル選択UIをスキップします。
-
-:UCMUI rename [file_path]
-    UIを使って、リネームするクラスファイルを選択し、新しい名前を入力します。
-    引数でファイルパスが指定された場合、ファイル選択UIをスキップします。
-
-------------------------------------------------------------------------------
-:UCM (ダイレクトコマンド)                         *UCM-commands-direct*
+:UCM (コマンド)                         *UCM-commands-direct*
 
 スクリプトや自動化から利用することを想定した、UIを介さないコマンドです。
 必要な引数をすべて指定する必要があります。
@@ -76,6 +52,9 @@ UCM.nvimは、用途に応じて2種類のコマンドを提供します。
 
 :UCM rename <Relative/Path/To/File> <NewName>
     クラスファイルを直接リネームします。拡張子は省略可能です。
+
+:UCM move <Relative/Path/To/File> <TargetDir>
+    クラスファイルを直接移動させます。拡張子は省略可能です。
 
 :UCM switch
     現在開いているファイルがヘッダーであればソースへ、ソースであれば
@@ -137,7 +116,12 @@ UCM.nvimは、用途に応じて2種類のコマンドを提供します。
   -- "telescope": Telescopeを優先 (fdが必須)
   -- "fzf-lua": fzf-luaを優先 (fdが必須)
   -- "native": Neovim標準の vim.ui を使用 (fdは不要)
-  ui_frontend = "auto",
+
+  ui = {
+    picker = {
+      mode = "auto",
+      prefer = { "telescope", "fzf_lua", "native", "dummy" },
+  },
 
   -- 'new'コマンド成功後、どのファイルを開くか
   -- "header": ヘッダーファイルのみ開く (デフォルト)
@@ -293,29 +277,7 @@ UCM.nvimは、用途に応じて2種類のコマンドを提供します。
 ==============================================================================
 4. Lua API                                                     *UCM-api*
 
-UCM.nvimは、責務が明確に分離された2つのAPIモジュールを提供します。
-
-------------------------------------------------------------------------------
-UCMUI.api (フロントエンド)                                     *UCM-api-ui*
-
-`neo-tree`のような外部プラグインとの連携に使用することが推奨される、高レベル
-APIです。ユーザーとの対話（UIの表示など）を担当します。
-
-APIモジュールを`require`する:
->lua
-  local ucm_ui = require("UCMUI.api")
-<
-
-*ucm_ui.new_class({opts})*
-*ucm_ui.delete_class({opts})*
-*ucm_ui.rename_class({opts})*
-    対話的にクラス操作を行います。
-    `opts`テーブル:
-      - `target_dir` (string, optional): `new`で使用。起点ディレクトリ。
-      - `file_path` (string, optional): `delete`/`rename`で使用。対象ファイル。
-      - `on_complete` (function, optional): 成功時のコールバック
-      - `on_cancel` (function, optional): ユーザーキャンセル時のコールバック
-      - `on_exit` (function, optional): 処理失敗時のコールバック
+UCM.nvimは、与えられた引数によりUIによるピッカーが自動的に起動します
 
 ------------------------------------------------------------------------------
 UCM.api (コアエンジン)                                       *UCM-api-core*
@@ -364,9 +326,6 @@ APIモジュールを`require`する:
 ==============================================================================
 5. 連携サンプル (neo-tree)                     *UCM-integration-examples*
 
-`UCMUI.api` を使うことで、`neo-tree`から直接UCM.nvimの機能を呼び出すことが
-できます。
-
 `on_complete`フックを使えば、ファイル操作が成功した後にneo-treeの表示を
 自動で更新する、といった連携も可能です。
 
@@ -378,7 +337,7 @@ APIモジュールを`require`する:
       mappings = {
         ["<leader>n"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").new_class({
+          require("UCM.api").new_class({
             target_dir = node.path,
             on_complete = function()
               -- 成功したらtreeをリフレッシュ
@@ -388,11 +347,11 @@ APIモジュールを`require`する:
         end,
         ["<leader>d"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").delete_class({ file_path = node.path })
+          require("UCM.api").delete_class({ file_path = node.path })
         end,
         ["<leader>r"] = function(state)
           local node = state.tree:get_node()
-          require("UCMUI.api").rename_class({ file_path = node.path })
+          require("UCM.api").rename_class({ file_path = node.path })
         end,
       },
     },

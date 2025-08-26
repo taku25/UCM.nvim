@@ -1,29 +1,46 @@
--- lua/UCM/cmd/core.lua
+-- lua/UCM/cmd/core.lua (UNLベースにリファクタリング)
 
-local finders = require("UCM.finder")
+local unl_finder = require("UNL.finder") -- ★ 変更点: UNLのファインダーを利用
 local selectors = require("UCM.selector")
-local logger = require("UCM.logger")
+local log = require("UCM.logger")
 local fs = require("vim.fs")
 
 local M = {}
 
 ---
--- (PUBLIC) For 'new' command. Resolves context from a target directory.
--- @param target_dir string: The relative or absolute path to the target directory.
--- @return table|nil, string: A context table or nil and an error message.
+-- 'new'コマンドのために、起点ディレクトリからコンテキストを解決する
+-- @param target_dir string
+-- @return table|nil, string
 function M.resolve_creation_context(target_dir)
-  -- Step 1: Get the absolute path using the canonical vim function.
-  -- This correctly handles both relative and absolute inputs.
-  local absolute_dir = fs.normalize(vim.fn.fnamemodify(target_dir, ":p"))
+  local absolute_dir = fs.normalize(target_dir)
 
-  -- Step 2: Find module context
-  local module_info = finders.module.find(absolute_dir)
-  if not module_info then
+  print(absolute_dir)
+  -- ★ 変更点: UNLのモジュールファインダーでモジュールルートを検索
+  local module_root = unl_finder.module.find_module_root(absolute_dir)
+  if not module_root then
     return nil, "Could not find a .build.cs to determine module context."
   end
 
-  -- Step 3: Resolve header and source directories
-  local header_dir, source_dir = selectors.folder.resolve_locations(absolute_dir, module_info.root)
+  -- .build.csファイルを探してモジュール名を取得 (より堅牢な方法)
+  local build_cs_path
+  for name, _ in vim.fs.dir(module_root) do
+    if name:match("%.[Bb]uild%.cs$") then
+      build_cs_path = name
+      break
+    end
+  end
+  if not build_cs_path then
+    return nil, "Found module root, but failed to find .build.cs file inside."
+  end
+  local module_name = vim.fn.fnamemodify(build_cs_path, ":r")
+
+  local module_info = {
+    root = module_root,
+    name = module_name,
+  }
+
+  -- ヘッダーとソースのディレクトリを解決 (このロジックはUCM固有なので残す)
+  local header_dir, source_dir = selectors.folder.resolve_locations(absolute_dir)
 
   return {
     module = module_info,
@@ -33,24 +50,22 @@ function M.resolve_creation_context(target_dir)
 end
 
 ---
--- (PUBLIC) For 'switch', 'delete', 'rename'. Resolves an existing class pair from a file.
--- @param file_path string: The relative or absolute path to the input file.
--- @return table|nil, string: A rich info table or nil and an error message.
+-- 'switch', 'delete', 'rename'のために、既存のクラスペアを解決する
+-- @param file_path string
+-- @return table|nil, string
 function M.resolve_class_pair(file_path)
-  -- Step 1: Get the absolute path using the canonical vim function.
-  local absolute_file = fs.normalize(vim.fn.fnamemodify(file_path, ":p"))
+  local absolute_file = fs.normalize(file_path)
 
   if vim.fn.filereadable(absolute_file) ~= 1 then
     return nil, "Input file does not exist: " .. absolute_file
   end
 
-  -- Step 2: Use the creation context resolver to get module and folder info
+  -- resolve_creation_contextは既にリファクタリング済みなので、そのまま利用できる
   local context, err = M.resolve_creation_context(fs.dirname(absolute_file))
   if not context then
     return nil, err
   end
 
-  -- Step 3: Build the result for the specific class
   local class_name = vim.fn.fnamemodify(absolute_file, ":t:r")
   local result = {
     h = fs.normalize(fs.joinpath(context.header_dir, class_name .. ".h")),
@@ -60,7 +75,6 @@ function M.resolve_class_pair(file_path)
     module = context.module,
   }
 
-  -- Step 4: Check for file existence and nullify if not found
   if vim.fn.filereadable(result.h) ~= 1 then result.h = nil end
   if vim.fn.filereadable(result.cpp) ~= 1 then result.cpp = nil end
 
@@ -70,5 +84,51 @@ function M.resolve_class_pair(file_path)
 
   return result
 end
+function M.get_fd_directory_cmd()
+  local full_path_regex = ".*[\\\\/](Source|Plugins)[\\\\/].*"
+  local excludes = { "Intermediate", "Binaries", "Saved" }
+
+  local fd_cmd = {
+    "fd",
+    "--regex", full_path_regex,
+    "--full-path",
+    "--type", "d",
+    "--path-separator", "/",
+    -- "--absolute-path",
+  } 
+  for _, dir in ipairs(excludes) do
+    table.insert(fd_cmd, "--exclude")
+    table.insert(fd_cmd, dir)
+  end
+  return fd_cmd
+end
+
+function M.get_fd_files_cmd()
+  local extensions = {
+    "cpp",
+    "h",
+    "hpp",
+    "inl",
+  }
+
+  local full_path_regex = ".*[\\\\/](Source|Plugins)[\\\\/].*\\.(" .. table.concat(extensions, "|") .. ")$"
+  local excludes = { "Intermediate", "Binaries", "Saved" }
+
+  local fd_cmd = {
+    "fd",
+    "--regex", full_path_regex,
+    "--full-path",
+    "--type", "f",
+    "--path-separator", "/",
+    -- "--absolute-path",
+  } 
+
+  for _, dir in ipairs(excludes) do
+    table.insert(fd_cmd, "--exclude")
+    table.insert(fd_cmd, dir)
+  end
+  return fd_cmd
+end
+
 
 return M

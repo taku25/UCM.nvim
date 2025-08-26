@@ -1,19 +1,18 @@
--- lua/UCG/init.lua
+-- lua/UCM/init.lua (新しいエントリーポイント)
+local unl_log = require("UNL.logging")
+local ucm_defaults = require("UCM.config.defaults")
 
--- This is the main entry point for the UCG.nvim plugin.
--- It handles the setup process and exposes the public API.
-
-local conf = require("UCM.conf")
-
--- The main module table that will be returned by `require("UCG")`
 local M = {}
 
---- The main setup function for the plugin.
--- Users will call this from their Neovim config.
--- @param user_opts table|nil User-provided configuration options.
 function M.setup(user_opts)
-  conf.setup(user_opts)
-end
+  -- この一行で、UNLに "UCM" プラグインを登録し、
+  -- 設定とロガーの両方を初期化します。
+  unl_log.setup("UCM", ucm_defaults, user_opts or {})
 
+  local log = unl_log.get("UCM")
+  if log then
+    log.debug("UCM.nvim setup complete.")
+  end
+end
 
 return M

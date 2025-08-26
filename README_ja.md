@@ -11,6 +11,7 @@
 
 `UCM.nvim` は、Unreal Engine のC++クラス管理（作成、ファイル切り替え、リネーム、削除）を、Neovimから行うためのプラグインです。
 [UBT.nvim](https://github.com/taku25/UBT.nvim) と一緒に使うことで作業効率が上がります
+[UEP.nvim](https://github.com/taku25/UEP.nvim) と一緒に使うことで作業効率が上がります
 
 [English](./README.md) | [日本語](./README_ja.md)
 
@@ -30,13 +31,13 @@
    <td>
    <div align=center>
    <img width="100%" alt="UCM new gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-new.gif" /><br>
-   <code>:UCMUI new</code> コマンド
+   <code>:UCM new</code> コマンド
    </div>
    </td>
    <td>
    <div align=center>
    <img width="100%" alt="UCM rename gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-rename.gif" /><br>
-   <code>:UCMUI rename</code> コマンド
+   <code>:UCM rename</code> コマンド
    </div>
    </td>
   </tr>
@@ -58,6 +59,7 @@
 return {
   'taku25/UCM.nvim',
   dependencies = {
+    "taku25/UNL.nvim", --!必須!
     -- どちらか
     "nvim-telescope/telescope.nvim",--オプション
     "ibhagwan/fzf-lua",--オプション
@@ -125,31 +127,21 @@ opts = {
 
 ## ⚡ 使い方 (Usage)
 
-`UCM.nvim`は、2種類のコマンド体系があります。
 
-### 1. `:UCMUI` (インタラクティブなUIコマンド)
+### 1. `:UCM` 
 
-対話的にクラスを管理するためのコマンドです
-
-```viml
-:UCMUI new      " UIを使って、対話的に新しいクラスを作成します
-:UCMUI delete   " UIを使って、削除するクラスファイルを選択します
-:UCMUI rename   " UIを使って、リネームするクラスファイルを選択し、新しい名前を入力します
-```
-
-### 2. `:UCM` (通常コマンド)
-
-UIを使わない引数をすべて指定するコマンドです。
+引数がない場合はuiが起動します
 
 ```viml
 :UCM new <ClassName> <ParentClass> [TargetDir] " 新しいクラスを直接作成
 :UCM delete <Relative/Path/To/File>           " クラスファイルを直接削除 (拡張子省略可)
 :UCM rename <Relative/Path/To/File> <NewName> " クラスファイルを直接リネーム (拡張子省略可)
+:UCM move <移動元のファイルパス> <移動先のディレクトリ> " クラスを新しいディレクトリに移動
 :UCM switch                                   " ヘッダー/ソースを切り替え
 ```
 
 ## 🤖 API & 自動化 (Automation Examples)
-`UCM.api`や`UCMUI.api`モジュールを使って、`Neo-tree`のようなファイラーと連携できます。
+`UCM.api`モジュールを使って、`Neo-tree`のようなファイラーと連携できます。
 すべてのAPIはdocumentで確認してください
 ```viml
 :help ucm
@@ -166,17 +158,17 @@ UIを使わない引数をすべて指定するコマンドです。
           mappings = {
             ["<leader>n"] = function(state)
               local node = state.tree:get_node()
-              require("UCMUI.api").new_class({ target_dir = node.path })
+              require("UCM.api").new_class({ target_dir = node.path })
             end,
             ["<leader>d"] = function(state)
               -- Neo-treeから取得したパスを、そのままコマンドの引数として渡すだけ！
               local node = state.tree:get_node()
               vim.api.nvim_echo({{ node.path, "Normal" }}, true, { err = false })
-              require("UCMUI.api").delete_class({ file_path = node.path })
+              require("UCM.api").delete_class({ file_path = node.path })
             end,
             ["<leader>r"] = function(state)
               local node = state.tree:get_node()
-              require("UCMUI.api").rename_class(
+              require("UCM.api").rename_class(
                 { file_path = node.path, })
             end,
           },
