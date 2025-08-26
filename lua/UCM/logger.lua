@@ -15,7 +15,7 @@ local function create_dummy_logger()
     notify = function(msg, level)
       level = level or "info"
       local lvl = vim.log.levels[(level:upper())] or vim.log.levels.INFO
-      vim.notify("[UEP] " .. tostring(msg), lvl)
+      vim.notify("[UCM] " .. tostring(msg), lvl)
     end,
     -- 他のログレベルの関数も、念のため空の関数として定義しておく
     info = function() end,
