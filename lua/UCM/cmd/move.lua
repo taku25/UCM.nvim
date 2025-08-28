@@ -82,7 +82,7 @@ function M.run(opts)
     
     unl_picker.pick({
       kind = "ucm_select_dir_for_move",
-      title = "Select Destination Directory for '" .. vim.fn.fnamemodify(source_file, ":t:r") .. "'",
+      title = "  Select Destination Directory for '" .. vim.fn.fnamemodify(source_file, ":t:r") .. "'",
       conf = get_config(),
       -- プロジェクト内の Source/Plugins ディレクトリを検索
       exec_cmd = cmd_core.get_fd_directory_cmd(),

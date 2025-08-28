@@ -106,7 +106,7 @@ function M.run(opts)
   -- UNLのPickerを呼び出して、ユーザーにファイルを選択させる
   unl_picker.pick({
     kind = "ucm_find_file_for_delete",
-    title = "Select Class File to Delete",
+    title = " Select Class File to Delete",
     conf = get_config(),
     logger_name = "UCM",
     exec_cmd = cmd_core.get_fd_files_cmd(),

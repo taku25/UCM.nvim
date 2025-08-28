@@ -112,7 +112,7 @@ function M.run(opts)
   -- UI Flow Step 1: リネーム対象のファイルを選択
   unl_picker.pick({
     kind = "ucm_find_file_for_rename",
-    title = "Select Class File to Rename",
+    title = "  Select Class File to Rename",
     conf = get_config(),
     exec_cmd = cmd_core.get_fd_files_cmd(),
     cwd = vim.loop.cwd(),

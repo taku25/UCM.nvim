@@ -196,7 +196,7 @@ function M.run(opts)
 
     unl_picker.pick({
       kind = "ucm_project_parent_class_no_preview",
-      title = "Select Parent Class",
+      title = "  Select Parent Class",
       items = choices,
       conf = conf,
       logger_name = "UCM",
