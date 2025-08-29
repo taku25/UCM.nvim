@@ -118,15 +118,15 @@ local function execute_file_rename(opts) -- opts = { file_path, new_class_name }
     end
 
     -- Step 6: (★修正) ファイル内容の置換 (ロールバック対応)
-    local content_replace_failed = false
-    for _, op in ipairs(operations) do
-      local ok, replace_err = replace_content_in_file(op.new, old_class_name, new_class_name)
-      if not ok then
-        log.get().error("Content replacement failed for %s: %s", op.new, replace_err)
-        content_replace_failed = true
-        break
-      end
-    end
+    local content_replace_failed =true 
+    -- for _, op in ipairs(operations) do
+    --   local ok, replace_err = replace_content_in_file(op.new, old_class_name, new_class_name)
+    --   if not ok then
+    --     log.get().error("Content replacement failed for %s: %s", op.new, replace_err)
+    --     content_replace_failed = true
+    --     break
+    --   end
+    -- end
     -- コンテンツ置換に失敗した場合、ファイル名をすべて元に戻す
     if content_replace_failed then
       for _, op in ipairs(operations) do pcall(vim.loop.fs_rename, op.new, op.old) end
