@@ -43,108 +43,119 @@ local function write_file(file_path, content)
 end
 
 -------------------------------------------------
--- Main Execution Flow (Core Logic)
+-- (★新規) Validation Helper Function
 -------------------------------------------------
+---
+-- ファイル作成操作が可能かを事前に検証する
+-- @param validation_opts table { header_path, source_path, header_template, source_template }
+-- @return boolean, string|nil
+local function validate_creation_operation(validation_opts)
+  -- 1. 出力先ファイルが既に存在しないか (上書き防止)
+  if vim.fn.filereadable(validation_opts.header_path) == 1 or vim.fn.filereadable(validation_opts.source_path) == 1 then
+    return false, "One or both class files already exist at the destination."
+  end
 
--- この関数が、情報がすべて揃った後に実行されるファイル作成の本体
-local function execute_file_creation(opts)
-  local conf = get_config()
+  -- 2. 出力先ディレクトリの書き込み権限
+  for _, dir in ipairs({ fs.dirname(validation_opts.header_path), fs.dirname(validation_opts.source_path) }) do
+    local test_file_path = fs.joinpath(dir, ".ucm_write_test")
+    local file, err = io.open(test_file_path, "w")
+    if not file then
+      return false, string.format("Permission denied in destination directory: %s (Reason: %s)", dir, tostring(err))
+    end
+    file:close()
+    pcall(vim.loop.fs_unlink, test_file_path) -- テストファイルを削除
+  end
 
-  -- コールバック関数を定義
-  local function on_complete(result)
-    log.get().info("Successfully created class: " .. result.class_name)
-    log.get().info(" -> Template used: " .. result.template_used)
-    log.get().info(" -> Header file: " .. result.header_path)
-    log.get().info(" -> Source file: " .. result.source_path)
-
-    local open_setting = conf.auto_open_on_new
-    if open_setting == "header" and result.header_path then
-      vim.cmd("edit " .. vim.fn.fnameescape(result.header_path))
-    elseif open_setting == "source" and result.source_path then
-      vim.cmd("edit " .. vim.fn.fnameescape(result.source_path))
-    elseif open_setting == "both" and result.header_path and result.source_path then
-      vim.cmd("edit " .. vim.fn.fnameescape(result.header_path))
-      vim.cmd("vsplit " .. vim.fn.fnameescape(result.source_path))
+  -- 3. テンプレートファイルが存在し読み取り可能か
+  for _, tpl_path in ipairs({ validation_opts.header_template, validation_opts.source_template }) do
+    if vim.fn.filereadable(tpl_path) ~= 1 then
+      return false, "Template file not found: " .. tpl_path
     end
   end
 
-  local function on_exit(err_msg)
-    log.get().error("Operation failed: " .. tostring(err_msg))
+  return true, nil
+end
+
+-------------------------------------------------
+-- Main Execution Flow (Core Logic)
+-------------------------------------------------
+
+local function execute_file_creation(opts)
+  local conf = get_config()
+
+  -- (★新規) 失敗イベントの発行とエラーログをまとめたヘルパー
+  local function publish_and_return_error(message)
+    unl_events.publish(unl_types.ON_AFTER_NEW_CLASS_FILE, { status = "failed" })
+    log.get().error(message)
   end
 
-  -- Step 1: コンテキストを解決
+  -- Step 1: コンテキストとテンプレートを解決
   local context, err = cmd_core.resolve_creation_context(opts.target_dir)
-  if not context then return on_exit(err) end
+  if not context then return publish_and_return_error(err) end
 
-  -- Step 2: テンプレートを選択
   local template_def = selectors.template.select(opts.parent_class, conf)
-  if not template_def then return on_exit("No suitable template found for: " .. opts.parent_class) end
+  if not template_def then return publish_and_return_error("No suitable template found for: " .. opts.parent_class) end
 
-  -- Step 3: テンプレート置換用の情報を準備
-  local api_macro = context.module.name:upper() .. "_API"
-  local common_replacements = {
-    CLASS_NAME = opts.class_name,
-    PARENT_CLASS = opts.parent_class,
-    API_MACRO = api_macro,
+  local template_base_path = path.get_template_base_path(template_def, "UCM")
+  if not template_base_path then return publish_and_return_error("Could not determine template base path.") end
+
+  -- Step 2: (★修正) ファイルパスとテンプレートパスを事前に計算
+  local header_path = fs.joinpath(context.header_dir, opts.class_name .. ".h")
+  local source_path = fs.joinpath(context.source_dir, opts.class_name .. ".cpp")
+  local header_template_path = fs.joinpath(template_base_path, template_def.header_template)
+  local source_template_path = fs.joinpath(template_base_path, template_def.source_template)
+  
+  -- Step 3: (★新規) すべての事前検証を実行
+  local is_valid, validation_err = validate_creation_operation({
+    header_path = header_path,
+    source_path = source_path,
+    header_template = header_template_path,
+    source_template = source_template_path,
+  })
+  if not is_valid then return publish_and_return_error(validation_err) end
+
+  -- Step 4: (★修正) テンプレートを処理してコンテンツを生成
+  local replacements = { -- ... (元のコードから共通部分を抽出)
+    CLASS_NAME = opts.class_name, PARENT_CLASS = opts.parent_class,
+    API_MACRO = context.module.name:upper() .. "_API",
     CLASS_PREFIX = template_def.class_prefix or "U",
     UCLASS_SPECIFIER = template_def.uclass_specifier or "",
     BASE_CLASS_NAME = template_def.base_class_name or opts.parent_class,
   }
-  local file_specific_info = {
-    header = {
-      template_file = template_def.header_template,
-      output_dir = context.header_dir,
-      output_extension = ".h",
-      direct_includes = template_def.direct_includes,
-      copyright = conf.copyright_header_h,
-    },
-    source = {
-      template_file = template_def.source_template,
-      output_dir = context.source_dir,
-      output_extension = ".cpp",
-      direct_includes = { string.format('"%s.h"', opts.class_name) },
-      copyright = conf.copyright_header_cpp,
-    },
-  }
-  local template_base_path = path.get_template_base_path(template_def, "UCM")
-  if not template_base_path then return on_exit("Could not determine template base path.") end
+  
+  local header_content, h_err = process_template(header_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = conf.copyright_header_h, DIRECT_INCLUDES = "#include " .. table.concat(template_def.direct_includes or {}, "\n#include ") }, replacements))
+  if not header_content then return publish_and_return_error(h_err) end
+  
+  local source_content, s_err = process_template(source_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = conf.copyright_header_cpp, DIRECT_INCLUDES = string.format('#include "%s.h"', opts.class_name) }, replacements))
+  if not source_content then return publish_and_return_error(s_err) end
 
-  -- Step 4: テンプレートを処理
-  local results = { template_used = template_def.name, class_name = opts.class_name }
-  for file_type, info in pairs(file_specific_info) do
-    local replacements = vim.deepcopy(common_replacements)
-    local includes_str = ""
-    if info.direct_includes and #info.direct_includes > 0 then
-      includes_str = "#include " .. table.concat(info.direct_includes, "\n#include ")
-    end
-    replacements.DIRECT_INCLUDES = includes_str
-    replacements.COPYRIGHT_HEADER = info.copyright
+  -- Step 5: (★修正) ファイル書き込みを実行
+  local ok_h, err_h = write_file(header_path, header_content)
+  if not ok_h then return publish_and_return_error("Failed to write header file: " .. err_h) end
 
-    local template_path = fs.joinpath(template_base_path, info.template_file)
-    local content, template_err = process_template(template_path, replacements)
-    if not content then return on_exit(template_err) end
-    results[file_type] = {
-      path = fs.joinpath(info.output_dir, opts.class_name .. info.output_extension),
-      content = content,
-    }
-  end
-  results.header_path = results.header.path
-  results.source_path = results.source.path
-
-  -- Step 5: ファイル書き込みを実行
-  if vim.fn.filereadable(results.header.path) == 1 or vim.fn.filereadable(results.source.path) == 1 then
-    return on_exit("One or both class files already exist.")
-  end
-  local ok_h, err_h = write_file(results.header.path, results.header.content)
-  if not ok_h then return on_exit("Failed to write header file: " .. err_h) end
-
-  local ok_s, err_s = write_file(results.source.path, results.source.content)
+  local ok_s, err_s = write_file(source_path, source_content)
   if not ok_s then
-    pcall(os.remove, results.header.path) -- クリーンアップ
-    return on_exit("Failed to write source file: " .. err_s)
+    pcall(vim.loop.fs_unlink, header_path) -- クリーンアップ
+    return publish_and_return_error("Failed to write source file: " .. err_s)
   end
 
-  on_complete(results) -- 成功
+  -- Step 6: (★修正) 成功イベントを発行し、後処理を行う
+  unl_events.publish(unl_types.ON_AFTER_NEW_CLASS_FILE, {
+    status = "success",
+    header_path = header_path,
+    source_path = source_path,
+    template_used = template_def.name,
+  })
+
+  log.get().info("Successfully created class: " .. opts.class_name)
+  -- (auto_open_on_new のロジックはここ)
+  local open_setting = conf.auto_open_on_new
+  if open_setting == "header" then vim.cmd("edit " .. vim.fn.fnameescape(header_path))
+  elseif open_setting == "source" then vim.cmd("edit " .. vim.fn.fnameescape(source_path))
+  elseif open_setting == "both" then
+    vim.cmd("edit " .. vim.fn.fnameescape(header_path))
+    vim.cmd("vsplit " .. vim.fn.fnameescape(source_path))
+  end
 end
 
 -------------------------------------------------

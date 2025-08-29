@@ -30,63 +30,115 @@ local function replace_content_in_file(file_path, old_name, new_name)
   return true
 end
 
+--- (★新規) リネーム操作の事前検証ヘルパー
+local function validate_rename_operation(operations)
+  for _, op in ipairs(operations) do
+    -- 1. リネーム元ファイルの権限チェック
+    local src_file, src_err = io.open(op.old, "a")
+    if not src_file then
+      return false, string.format("Permission denied on source file: %s (Reason: %s)", op.old, tostring(src_err))
+    end
+    src_file:close()
+    -- 2. リネーム先ファイルが既に存在しないか (上書き防止)
+    if vim.fn.filereadable(op.new) == 1 or vim.fn.isdirectory(op.new) == 1 then
+      return false, string.format("Destination file already exists, rename aborted to prevent overwrite: %s", op.new)
+    end
+    -- 3. リネーム先ディレクトリの書き込み権限
+    local dest_dir = fs.dirname(op.new)
+    local test_file_path = fs.joinpath(dest_dir, ".ucm_write_test")
+    local file, err = io.open(test_file_path, "w")
+    if not file then
+      return false, string.format("Permission denied in destination directory: %s (Reason: %s)", dest_dir, tostring(err))
+    end
+    file:close()
+    pcall(vim.loop.fs_unlink, test_file_path)
+  end
+  return true, nil
+end
+
 -------------------------------------------------
 -- Main Execution Flow (Core Logic)
 -------------------------------------------------
 
--- 全ての情報が揃った後に呼ばれる、リネーム処理の本体
 local function execute_file_rename(opts) -- opts = { file_path, new_class_name }
-  -- 1. クラスのペア (.h と .cpp) を解決
-  local class_info, err = cmd_core.resolve_class_pair(opts.file_path)
-  if not class_info then
-    return log.get().error(err)
+  -- (★新規) 失敗イベント発行ヘルパー
+  local function publish_and_return_error(message)
+    unl_events.publish(unl_types.ON_AFTER_RENAME_CLASS_FILE, { status = "failed" })
+    log.get().error(message)
   end
+
+  -- Step 1: クラスペア解決と基本情報準備
+  local class_info, err = cmd_core.resolve_class_pair(opts.file_path)
+  if not class_info then return publish_and_return_error(err) end
 
   local old_class_name = class_info.class_name
   local new_class_name = opts.new_class_name
+  if old_class_name == new_class_name then return log.get().info("Rename canceled: names are identical.") end
 
-  if old_class_name == new_class_name then
-    return log.get().info("Rename canceled: names are identical.")
-  end
-
+  -- Step 2: リネーム操作リストを作成
+  local operations = {}
   local files_to_process = {}
   if class_info.h then table.insert(files_to_process, class_info.h) end
   if class_info.cpp then table.insert(files_to_process, class_info.cpp) end
+  if #files_to_process == 0 then return publish_and_return_error("No existing class files found to rename.") end
 
-  if #files_to_process == 0 then
-    return log.get().error("No existing class files found to rename.")
-  end
-
-  -- 2. ユーザーに最終確認
-  local prompt_lines = { string.format("Rename '%s' to '%s'?", old_class_name, new_class_name), "" }
   for _, old_path in ipairs(files_to_process) do
     local new_path = fs.joinpath(fs.dirname(old_path), new_class_name .. "." .. vim.fn.fnamemodify(old_path, ":e"))
-    table.insert(prompt_lines, old_path .. " -> " .. new_path)
+    table.insert(operations, { old = old_path, new = new_path })
   end
+
+  -- Step 3: (★新規) 事前検証を実行
+  local is_valid, validation_err = validate_rename_operation(operations)
+  if not is_valid then return publish_and_return_error(validation_err) end
+
+  -- Step 4: ユーザーに最終確認
+  local prompt_lines = { string.format("Rename '%s' to '%s'?", old_class_name, new_class_name), "" }
+  for _, op in ipairs(operations) do table.insert(prompt_lines, op.old .. " -> " .. op.new) end
   
   vim.ui.select({ "Yes, apply rename", "No, cancel" }, { prompt = table.concat(prompt_lines, "\n") }, function(choice)
-    if choice ~= "Yes, apply rename" then
-      return log.get().info("Rename canceled by user.")
+    if choice ~= "Yes, apply rename" then return log.get().info("Rename canceled by user.") end
+
+    -- Step 5: (★修正) ファイル名変更を先に実行 (ロールバック対応)
+    local renamed_files = {} -- 正常にリネームできたファイルを追跡
+    local rename_failed = false
+    for _, op in ipairs(operations) do
+      local ok, rename_err = pcall(vim.loop.fs_rename, op.old, op.new)
+      if ok then
+        table.insert(renamed_files, { old = op.old, new = op.new })
+      else
+        log.get().error("File rename failed for %s: %s", op.old, tostring(rename_err))
+        rename_failed = true
+        break
+      end
+    end
+    -- リネームに失敗した場合、成功したものを元に戻す
+    if rename_failed then
+      for _, rf in ipairs(renamed_files) do pcall(vim.loop.fs_rename, rf.new, rf.old) end
+      return publish_and_return_error("File rename operation failed. Rolling back changes.")
     end
 
-    -- 3. ファイル内容の置換
-    for _, path in ipairs(files_to_process) do
-      local ok, replace_err = replace_content_in_file(path, old_class_name, new_class_name)
+    -- Step 6: (★修正) ファイル内容の置換 (ロールバック対応)
+    local content_replace_failed = false
+    for _, op in ipairs(operations) do
+      local ok, replace_err = replace_content_in_file(op.new, old_class_name, new_class_name)
       if not ok then
-        return log.get().error("Content replacement failed: " .. replace_err)
+        log.get().error("Content replacement failed for %s: %s", op.new, replace_err)
+        content_replace_failed = true
+        break
       end
     end
-
-    -- 4. ファイル自体のリネーム
-    for _, old_path in ipairs(files_to_process) do
-      local new_path = fs.joinpath(fs.dirname(old_path), new_class_name .. "." .. vim.fn.fnamemodify(old_path, ":e"))
-      local rename_ok, rename_err = pcall(vim.loop.fs_rename, old_path, new_path)
-      if not rename_ok then
-        -- (ここでロールバック処理を入れることも可能だが、今回はエラー表示のみ)
-        return log.get().error("File rename operation failed: " .. tostring(rename_err))
-      end
+    -- コンテンツ置換に失敗した場合、ファイル名をすべて元に戻す
+    if content_replace_failed then
+      for _, op in ipairs(operations) do pcall(vim.loop.fs_rename, op.new, op.old) end
+      return publish_and_return_error("Content replacement failed. Rolling back changes.")
     end
-
+    
+    -- Step 7: (★修正) 成功イベントの発行
+    unl_events.publish(unl_types.ON_AFTER_RENAME_CLASS_FILE, {
+      status = "success",
+      old_class_name = old_class_name,
+      new_class_name = new_class_name,
+    })
     log.get().info("Rename complete. IMPORTANT: Please regenerate your project files.")
   end)
 end

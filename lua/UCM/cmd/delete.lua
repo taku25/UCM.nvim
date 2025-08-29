@@ -13,15 +13,39 @@ end
 local M = {}
 
 -------------------------------------------------
+-- Helper Functions
+-------------------------------------------------
+
+---
+-- (このヘルパー関数は前回の提案のままです)
+local function check_permissions(files_to_check)
+  for _, path in ipairs(files_to_check) do
+    local file, err = io.open(path, "a")
+    if not file then
+      return false, string.format("Permission denied or file locked: %s (Reason: %s)", path, tostring(err))
+    end
+    file:close()
+  end
+  return true, nil
+end
+
+-------------------------------------------------
 -- Main Execution Flow (Core Logic)
 -------------------------------------------------
 
--- ファイルパスが確定した後に呼ばれる、ファイル削除の本体
 local function execute_file_deletion(file_path)
+  -- (★新規) 失敗イベントの発行とエラーログをまとめたヘルパー関数
+  local function publish_and_return_error(message)
+    unl_events.publish(unl_types.ON_AFTER_DELETE_CLASS_FILE, { status = "failed" })
+    log.get().error(message)
+    -- 呼び出し元で return するので、この関数は何も返さなくて良い
+  end
+
   -- 1. ヘッダーとソースのペアを解決
   local class_info, err = cmd_core.resolve_class_pair(file_path)
   if not class_info then
-    return log.get().error(err)
+    -- (★修正) ヘルパーを呼び出して早期リターン
+    return publish_and_return_error(err)
   end
 
   -- 2. 削除対象のファイルリストを作成
@@ -30,35 +54,49 @@ local function execute_file_deletion(file_path)
   if class_info.cpp then table.insert(files_to_delete, class_info.cpp) end
 
   if #files_to_delete == 0 then
+    -- このケースはエラーではないので、イベントは発行せず警告のみ
     return log.get().warn("No existing class files found to delete for: " .. class_info.class_name)
   end
 
-  -- 3. ユーザーに最終確認
+  -- 3. パーミッションを事前チェック
+  local can_delete, perm_err = check_permissions(files_to_delete)
+  if not can_delete then
+    -- (★修正) ヘルパーを呼び出して早期リターン
+    return publish_and_return_error(perm_err)
+  end
+
+  -- 4. ユーザーに最終確認
   local prompt_str = string.format("Permanently delete class '%s'?\n\n%s", class_info.class_name, table.concat(files_to_delete, "\n"))
   local yes_choice = "Yes, delete files"
   vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt_str }, function(choice)
+    -- ユーザーによるキャンセルは「失敗」ではないので、イベントは発行しない
     if choice ~= yes_choice then
       return log.get().info("Deletion canceled.")
     end
 
-    -- 4. 実際のファイル削除処理
-    local deleted_files = {}
+    -- 5. 実際のファイル削除処理 (この中のロジックは変更なし)
+    local all_deleted_successfully = true
     for _, path in ipairs(files_to_delete) do
       local ok, unlink_err = pcall(vim.loop.fs_unlink, path)
       if ok then
-        table.insert(deleted_files, path)
-        -- 開いているバッファを削除
         local bufnr = vim.fn.bufnr(path)
-        if bufnr > 0 then
-          vim.cmd("bdelete! " .. bufnr)
-        end
+        if bufnr > 0 then vim.cmd("bdelete! " .. bufnr) end
       else
         log.get().error("Failed to delete file %s: %s", path, tostring(unlink_err))
+        all_deleted_successfully = false
       end
     end
 
-    if #deleted_files > 0 then
+    -- 6. 最終的な結果に基づいてイベントを発行
+    local result_payload = {
+      status = all_deleted_successfully and "success" or "failed"
+    }
+    unl_events.publish(unl_types.ON_AFTER_DELETE_CLASS_FILE, result_payload)
+
+    if all_deleted_successfully then
       log.get().info("Successfully deleted class '%s'", class_info.class_name)
+    else
+      log.get().error("Failed to delete one or more files for class '%s'. Please check the log.", class_info.class_name)
     end
   end)
 end
