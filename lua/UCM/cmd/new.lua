@@ -87,7 +87,7 @@ local function execute_file_creation(opts)
 
   -- (★新規) 失敗イベントの発行とエラーログをまとめたヘルパー
   local function publish_and_return_error(message)
-    unl_events.publish(unl_types.ON_AFTER_NEW_CLASS_FILE, { status = "failed" })
+    unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, { status = "failed" })
     log.get().error(message)
   end
 
