@@ -4,6 +4,8 @@ local unl_picker = require("UNL.backend.picker")
 local cmd_core = require("UCM.cmd.core")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
+local unl_events = require("UNL.event.events")
+local unl_event_types = require("UNL.event.types")
 
 local function get_config()
   return require("UNL.config").get("UCM")
@@ -63,7 +65,7 @@ end
 local function execute_file_rename(opts) -- opts = { file_path, new_class_name }
   -- (★新規) 失敗イベント発行ヘルパー
   local function publish_and_return_error(message)
-    unl_events.publish(unl_types.ON_AFTER_RENAME_CLASS_FILE, { status = "failed" })
+    unl_events.publish(unl_event_types.ON_AFTER_RENAME_CLASS_FILE, { status = "failed" })
     log.get().error(message)
   end
 

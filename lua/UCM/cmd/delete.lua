@@ -4,6 +4,8 @@ local unl_picker = require("UNL.backend.picker")
 local cmd_core = require("UCM.cmd.core")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
+local unl_events = require("UNL.event.events")
+local unl_event_types = require("UNL.event.types")
 
 
 local function get_config()
@@ -36,7 +38,7 @@ end
 local function execute_file_deletion(file_path)
   -- (★新規) 失敗イベントの発行とエラーログをまとめたヘルパー関数
   local function publish_and_return_error(message)
-    unl_events.publish(unl_types.ON_AFTER_DELETE_CLASS_FILE, { status = "failed" })
+    unl_events.publish(unl_event_types.ON_AFTER_DELETE_CLASS_FILE, { status = "failed" })
     log.get().error(message)
     -- 呼び出し元で return するので、この関数は何も返さなくて良い
   end

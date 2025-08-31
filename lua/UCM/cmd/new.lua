@@ -6,6 +6,8 @@ local cmd_core = require("UCM.cmd.core")
 local path = require("UCM.path")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
+local unl_events = require("UNL.event.events")
+local unl_event_types = require("UNL.event.types")
 
 -- UNLの設定システムからこのプラグイン("UCM")用の設定を取得するヘルパー関数
 local function get_config()
@@ -140,7 +142,7 @@ local function execute_file_creation(opts)
   end
 
   -- Step 6: (★修正) 成功イベントを発行し、後処理を行う
-  unl_events.publish(unl_types.ON_AFTER_NEW_CLASS_FILE, {
+  unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, {
     status = "success",
     header_path = header_path,
     source_path = source_path,
