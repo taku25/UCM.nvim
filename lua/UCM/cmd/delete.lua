@@ -93,7 +93,7 @@ local function execute_file_deletion(file_path)
     local result_payload = {
       status = all_deleted_successfully and "success" or "failed"
     }
-    unl_events.publish(unl_types.ON_AFTER_DELETE_CLASS_FILE, result_payload)
+    unl_events.publish(unl_event_types.ON_AFTER_DELETE_CLASS_FILE, result_payload)
 
     if all_deleted_successfully then
       log.get().info("Successfully deleted class '%s'", class_info.class_name)
