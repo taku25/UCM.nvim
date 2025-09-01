@@ -120,7 +120,7 @@ local function execute_file_rename(opts) -- opts = { file_path, new_class_name }
     end
 
     -- Step 6: (★修正) ファイル内容の置換 (ロールバック対応)
-    local content_replace_failed =true 
+    local content_replace_failed = false 
     -- for _, op in ipairs(operations) do
     --   local ok, replace_err = replace_content_in_file(op.new, old_class_name, new_class_name)
     --   if not ok then
@@ -136,7 +136,7 @@ local function execute_file_rename(opts) -- opts = { file_path, new_class_name }
     end
     
     -- Step 7: (★修正) 成功イベントの発行
-    unl_events.publish(unl_types.ON_AFTER_RENAME_CLASS_FILE, {
+    unl_events.publish(unl_event_types.ON_AFTER_RENAME_CLASS_FILE, {
       status = "success",
       old_class_name = old_class_name,
       new_class_name = new_class_name,
