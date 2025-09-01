@@ -8,6 +8,23 @@ local M = {
     file = { enable = true, max_kb = 512, rotate = 3, filename = "ucm.log" },
     perf = { enabled = false, patterns = { "^refresh" }, level = "trace" },
   },
+
+  ui = {
+    picker = {
+      mode = "auto",
+      prefer = { "telescope", "fzf-lua", "native", "dummy" },
+    },
+    filer = {
+      mode = "auto",
+      prefer = { "nvim-tree", "neo-tree", "native", "dummy"  },
+    },
+    progress = {
+      mode = "auto",
+      enable = true,
+      prefer = { "fidget", "generic_status", "window", "notify", "dummy" },
+      allow_regression = false,
+    },
+  },
   cache = { dirname = "UCM" },
   project = {
     localrc_filename = ".ucmrc",
