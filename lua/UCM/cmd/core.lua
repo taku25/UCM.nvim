@@ -14,14 +14,11 @@ local M = {}
 function M.resolve_creation_context(target_dir)
   local absolute_dir = fs.normalize(target_dir)
 
-  print(absolute_dir)
-  -- ★ 変更点: UNLのモジュールファインダーでモジュールルートを検索
   local module_root = unl_finder.module.find_module_root(absolute_dir)
   if not module_root then
     return nil, "Could not find a .build.cs to determine module context."
   end
 
-  -- .build.csファイルを探してモジュール名を取得 (より堅牢な方法)
   local build_cs_path
   for name, _ in vim.fs.dir(module_root) do
     if name:match("%.[Bb]uild%.cs$") then
@@ -32,14 +29,17 @@ function M.resolve_creation_context(target_dir)
   if not build_cs_path then
     return nil, "Found module root, but failed to find .build.cs file inside."
   end
-  local module_name = vim.fn.fnamemodify(build_cs_path, ":r")
+
+  --- ★★★ ここからが修正箇所 ★★★
+  -- ".Build.cs" または ".build.cs" を空文字列に置換して、モジュール名だけを抽出する
+  local module_name = build_cs_path:gsub("%.[Bb]uild%.cs$", "")
+  --- ★★★ 修正箇所ここまで ★★★
 
   local module_info = {
     root = module_root,
     name = module_name,
   }
 
-  -- ヘッダーとソースのディレクトリを解決 (このロジックはUCM固有なので残す)
   local header_dir, source_dir = selectors.folder.resolve_locations(absolute_dir)
 
   return {
