@@ -1,6 +1,7 @@
 -- lua/UCM/path.lua
 
 -- This module contains utility functions related to path resolution and manipulation.
+local log = require("UCM.logger")
 
 local M = {}
 
@@ -23,7 +24,7 @@ end
 -- @return string|nil The absolute path to the plugin's root directory, or nil if not found.
 function M.get_plugin_root_path(plugin_name)
   if not plugin_name then
-    vim.notify("get_plugin_root_path requires a plugin_name.", vim.log.levels.ERROR)
+    log.get().error("get_plugin_root_path requires a plugin_name.", vim.log.levels.ERROR)
     return nil
   end
   
@@ -38,7 +39,7 @@ function M.get_plugin_root_path(plugin_name)
     end
   end
   
-  vim.notify("[" .. plugin_name .. "] Could not determine the plugin's root path.", vim.log.levels.WARN)
+  log.get().error("[" .. plugin_name .. "] Could not determine the plugin's root path.", vim.log.levels.WARN)
   return nil
 end
 
