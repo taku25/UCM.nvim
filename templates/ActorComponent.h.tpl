@@ -8,7 +8,7 @@
 
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class {{API_MACRO}} {{CLASS_PREFIX}}{{CLASS_NAME}} : public {{CLASS_PREFIX}}{{BASE_CLASS_NAME}}
+class {{API_MACRO}} {{CLASS_PREFIX}}{{CLASS_NAME}} : public {{BASE_CLASS_NAME}}
 {
 	GENERATED_BODY()
 

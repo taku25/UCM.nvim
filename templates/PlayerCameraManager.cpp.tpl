@@ -1,0 +1,10 @@
+
+{{COPYRIGHT_HEADER}}
+
+#include "{{CLASS_NAME}}.h"
+
+{{CLASS_PREFIX}}{{CLASS_NAME}}::{{CLASS_PREFIX}}{{CLASS_NAME}}()
+{
+
+}
+
