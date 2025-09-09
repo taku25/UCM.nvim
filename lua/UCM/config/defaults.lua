@@ -46,18 +46,6 @@ local M = {
 
   template_rules = {
     {
-      name = "Actor",
-      priority = 10,
-      parent_regex = "^A",
-      template_dir = "builtin",
-      header_template = "Actor.h.tpl",
-      source_template = "Actor.cpp.tpl",
-      class_prefix = "A", -- ★ フラット化
-      uclass_specifier = "", -- ★ フラット化
-      base_class_name = "Actor", -- ★ フラット化
-      direct_includes = { '"GameFramework/Actor.h"' }, -- ★ フラット化
-    },
-    {
       name = "Character",
       priority = 200,
       parent_regex = "^A.*Character$",
@@ -66,7 +54,7 @@ local M = {
       source_template = "Character.cpp.tpl",
       class_prefix = "A",
       uclass_specifier = "",
-      base_class_name = "Character",
+      base_class_name = "ACharacter",
       direct_includes = { '"GameFramework/Character.h"' },
     },
     -- PlayerCameraManager
@@ -79,7 +67,7 @@ local M = {
       source_template = "PlayerCameraManager.cpp.tpl",
       class_prefix = "A",
       uclass_specifier = "",
-      base_class_name = "PlayerCameraManager",
+      base_class_name = "APlayerCameraManager",
       direct_includes = { '"Camera/PlayerCameraManager.h"' },
     },
     -- ActorComponent Class
@@ -92,7 +80,7 @@ local M = {
       source_template = "ActorComponent.cpp.tpl",
       class_prefix = "U",
       uclass_specifier = "",
-      base_class_name = "ActorComponent",
+      base_class_name = "UActorComponent",
       direct_includes = { '"Components/ActorComponent.h"' },
     },
     -- SceneComponent Class
@@ -105,7 +93,7 @@ local M = {
       source_template = "ActorComponent.cpp.tpl",
       class_prefix = "U",
       uclass_specifier = "",
-      base_class_name = "SceneComponent",
+      base_class_name = "USceneComponent",
       direct_includes = { '"Components/SceneComponent.h"' },
     },
     -- BlueprintLibrary Class
@@ -118,7 +106,7 @@ local M = {
       source_template = "UObject.cpp.tpl",
       class_prefix = "U",
       uclass_specifier = "",
-      base_class_name = "BlueprintFunctionLibrary",
+      base_class_name = "UBlueprintFunctionLibrary",
       direct_includes = { '"Kismet/BlueprintFunctionLibrary.h"' },
     },
     -- GameModeBase Class
@@ -131,7 +119,7 @@ local M = {
       source_template = "UObject.cpp.tpl",
       class_prefix = "A",
       uclass_specifier = "",
-      base_class_name = "GameModeBase",
+      base_class_name = "AGameModeBase",
       direct_includes = { '"GameFramework/GameModeBase.h"' },
     },
     -- Hud Class
@@ -144,7 +132,7 @@ local M = {
       source_template = "UObject.cpp.tpl",
       class_prefix = "A",
       uclass_specifier = "",
-      base_class_name = "HUD",
+      base_class_name = "AHUD",
       direct_includes = { '"GameFramework/HUD.h"' },
     },
     -- Interface Class
@@ -157,7 +145,7 @@ local M = {
       source_template = "Interface.cpp.tpl",
       class_prefix = "U", -- U for UInterface, but I for class name
       uclass_specifier = "MinimalAPI",
-      base_class_name = "Interface",
+      base_class_name = "UInterface",
       direct_includes = {}, -- UInterface does not include its base class
     },
     -- PlayerController Class
@@ -166,11 +154,11 @@ local M = {
       priority = 200,
       parent_regex = "^APlayerController$",
       template_dir = "builtin",
-      header_template = "UObject.h.tpl",
-      source_template = "UObject.cpp.tpl",
+      header_template = "PlayerController.h.tpl",
+      source_template = "PlayerController.cpp.tpl",
       class_prefix = "A",
       uclass_specifier = "",
-      base_class_name = "PlayerController",
+      base_class_name = "APlayerController",
       direct_includes = { '"GameFramework/PlayerController.h"' },
     },
     -- PlayerState Class
@@ -183,7 +171,7 @@ local M = {
       source_template = "UObject.cpp.tpl",
       class_prefix = "A",
       uclass_specifier = "",
-      base_class_name = "PlayerState",
+      base_class_name = "APlayerState",
       direct_includes = { '"GameFramework/PlayerState.h"' },
     },
     -- SlateWidget Class
@@ -222,20 +210,55 @@ local M = {
       source_template = "UObject.cpp.tpl",
       class_prefix = "A",
       uclass_specifier = "",
-      base_class_name = "WorldSettings",
+      base_class_name = "AWorldSettings",
       direct_includes = { '"GameFramework/WorldSettings.h"' },
     },
     -- Generic UObject fallback (lowest priority)
     {
+      name = "Actor",
+      priority = 10,
+      parent_regex = "^AActor$", -- "^A" から "^AActor$" へ変更
+      template_dir = "builtin",
+      header_template = "Actor.h.tpl",
+      source_template = "Actor.cpp.tpl",
+      class_prefix = "A", -- ★ フラット化
+      uclass_specifier = "", -- ★ フラット化
+      base_class_name = "AActor", -- ★ フラット化
+      direct_includes = { '"GameFramework/Actor.h"' }, -- ★ フラット化
+    },
+
+    {
       name = "Object",
       priority = 1,
-      parent_regex = "^U", -- Default for any UObject
+      parent_regex = "^UObject$", -- "^U" から "^UObject$" へ変更
       template_dir = "builtin",
       header_template = "UObject.h.tpl",
       source_template = "UObject.cpp.tpl",
       class_prefix = "U",
       uclass_specifier = "",
-      base_class_name = "Object",
+      base_class_name = "UObject",
+      direct_includes = { '"UObject/Object.h"' },
+    },
+
+    {
+      name = "Generic Actor Fallback", -- 名前を分かりやすく変更
+      priority = 1, -- ★低い優先度
+      parent_regex = "^A",
+      header_template = "Actor.h.tpl",
+      source_template = "Actor.cpp.tpl",
+      class_prefix = "A",
+      base_class_name = "AActor", -- このルールが最終的に使われた場合の親
+      direct_includes = { '"GameFramework/Actor.h"' },
+    },
+    
+    {
+      name = "Generic UObject Fallback", -- 名前を分かりやすく変更
+      priority = 1, -- ★低い優先度
+      parent_regex = "^U",
+      header_template = "UObject.h.tpl",
+      source_template = "UObject.cpp.tpl",
+      class_prefix = "U",
+      base_class_name = "UObject",
       direct_includes = { '"UObject/Object.h"' },
     },
     {
@@ -247,7 +270,7 @@ local M = {
       source_template = "UObject.cpp.tpl",
       class_prefix = "U",
       uclass_specifier = "",
-      base_class_name = "Object",
+      base_class_name = "UObject",
       direct_includes = { '"UObject/Object.h"' },
     },
   },
