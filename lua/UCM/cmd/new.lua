@@ -189,93 +189,78 @@ function M.run(opts)
   local collected_opts = {}
 
   -- UI Flow Step 2: 親クラスを選択
-  local function ask_for_parent_class()
+ local function ask_for_parent_class()
     local conf = get_config()
 
-    local function show_static_picker()
-      log.get().info("Using static template list for parent class selection.")
-      local choices = {}
-      local seen = {}
-      for _, rule in ipairs(conf.template_rules) do
-        local name = rule.base_class_name or rule.name
-        if not seen[name] then
-          table.insert(choices, { value = name, label = name })
-          seen[name] = true
-        end
-      end
-      table.sort(choices, function(a, b) return a.label < b.label end)
-      unl_picker.pick({
-        kind = "ucm_project_parent_class_static",
-        title = "  Select Parent Class (Templates)",
-        items = choices,
-        conf = conf,
-        logger_name = "UCM",
-        preview_enabled = false,
-        on_submit = function(selected)
-          if not selected then return log.get().info("Class creation canceled.") end
-          collected_opts.parent_class = selected
-          if not conf.confirm_on_new then
-            execute_file_creation(collected_opts)
-          else
-            local prompt = ("Create class '%s' with parent '%s'?"):format(collected_opts.class_name, collected_opts.parent_class)
-            local yes_choice = "Yes, create files"
-            vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt }, function(choice)
-              if choice == yes_choice then
-                execute_file_creation(collected_opts)
-              else
-                log.get().info("Class creation canceled.")
-              end
-            end)
-          end
-        end,
-      })
-    end
+    -- ★★★ ここからが、静的リストと動的リストをマージする新しいロジックです ★★★
 
-    local unl_api_ok, unl_api = pcall(require, "UNL.api")
-    if not unl_api_ok then
-      log.get().warn("UNL.api not available, falling back to static parent class list.")
-      return show_static_picker()
-    end
-
-    log.get().info("Fetching project classes from UEP.nvim provider...")
-    local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", {
-          logger_name = "UCM"
+    -- Step 1: UCMが元々持っている静的なテンプレートリストを準備
+    local static_choices = {}
+    local seen_classes = {} -- ★ 重複防止用のテーブル
+    for _, rule in ipairs(conf.template_rules) do
+      local name = rule.base_class_name
+      if name and not seen_classes[name] then
+        table.insert(static_choices, {
+          value = name,
+          label = string.format("%-40s (%s)", name, "Engine Template")
         })
-
-    if not (req_ok and header_details and next(header_details)) then
-      log.get().info("Could not get class data from UEP.nvim. Falling back to static parent class list. (Hint: run :UEP refresh)")
-      return show_static_picker()
-    end
-
-    log.get().info("Successfully fetched %d header details. Processing for picker...", vim.tbl_count(header_details))
-    local choices = {}
-    for file_path, details in pairs(header_details) do
-      if details.classes then
-        for _, class_info in ipairs(details.classes) do
-          if not class_info.is_final and not class_info.is_interface then
-            table.insert(choices, {
-              value = class_info.class_name,
-              label = string.format("%-40s (%s) 📄 %s", 
-              class_info.class_name, 
-              class_info.base_class or "UObject", 
-              vim.fn.fnamemodify(file_path, ":t"))
-            })
-          end
-        end
+        seen_classes[name] = true
       end
     end
-    table.sort(choices, function(a, b) return a.value < b.value end)
 
+    -- Step 2: UEPプロバイダーから動的なクラスリストの取得を試みる
+    local dynamic_choices = {}
+    local unl_api_ok, unl_api = pcall(require, "UNL.api")
+    if unl_api_ok then
+      log.get().info("Fetching project classes from UEP.nvim provider...")
+      local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", { logger_name = "UCM" })
+
+      if req_ok and header_details and next(header_details) then
+        log.get().info("Successfully fetched %d header details.", vim.tbl_count(header_details))
+        for file_path, details in pairs(header_details) do
+          if details.classes then
+            for _, class_info in ipairs(details.classes) do
+              -- 静的リストにまだないクラスのみを追加する
+              if not seen_classes[class_info.class_name] and not class_info.is_final and not class_info.is_interface then
+                table.insert(dynamic_choices, {
+                  value = class_info.class_name,
+                  label = string.format("%-40s (%s) 📄 %s", 
+                                        class_info.class_name, 
+                                        class_info.base_class or "UObject", 
+                                        vim.fn.fnamemodify(file_path, ":t"))
+                })
+                -- 動的リストに追加したものも、seen_classesに記録しておく
+                seen_classes[class_info.class_name] = true
+              end
+            end
+          end
+        end
+      else
+        log.get().info("Could not get class data from UEP.nvim. Using static template list only.")
+      end
+    else
+      log.get().info("UNL.api not available. Using static template list only.")
+    end
+
+    -- Step 3: 静的リストと動的リストを結合し、ソートする
+    -- ユーザーのカスタムクラスが上に来る方が便利なので、動的リストを先に結合する
+    table.sort(dynamic_choices, function(a, b) return a.value < b.value end)
+    table.sort(static_choices, function(a, b) return a.value < b.value end)
+    local all_choices = vim.list_extend(dynamic_choices, static_choices)
+
+    -- Step 4: 結合したリストでPickerを表示する
     unl_picker.pick({
-      kind = "ucm_select_parent_class_from_project",
-      title = "  Select Parent Class (Live Project Scan)",
-      items = choices,
+      kind = "ucm_select_parent_class_combined",
+      title = "  Select Parent Class",
+      items = all_choices, -- ★ 結合したリストを渡す
       conf = conf,
       logger_name = "UCM",
       preview_enabled = false, 
       on_submit = function(selected)
         if not selected then return log.get().info("Class creation canceled.") end
         collected_opts.parent_class = selected
+        
+        -- (以降の確認UIとexecute_file_creation呼び出しのロジックは変更なし)
         if not conf.confirm_on_new then
           execute_file_creation(collected_opts)
         else

@@ -13,7 +13,7 @@ local function get_parent_class_name(class_name)
     if not ok then unl_api = false end
   end
   if not unl_api then return nil end
-  local req_ok, header_details = unl_api.provider.request("uep.get_project_classes")
+  local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", { logger_name = "UCM"})
   if not (req_ok and header_details) then return nil end
   for _, details in pairs(header_details) do
     if details.classes then
