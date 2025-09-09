@@ -238,7 +238,9 @@ function M.run(opts)
     end
 
     log.get().info("Fetching project classes from UEP.nvim provider...")
-    local req_ok, header_details = unl_api.provider.request("uep.get_project_classes")
+    local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", {
+          logger_name = "UCM"
+        })
 
     if not (req_ok and header_details and next(header_details)) then
       log.get().info("Could not get class data from UEP.nvim. Falling back to static parent class list. (Hint: run :UEP refresh)")
