@@ -199,7 +199,7 @@ function M.run(opts)
       if name and not seen_classes[name] then
         table.insert(static_choices, {
           value = name,
-          label = string.format("%-40s (%s)", name, "Engine Template")
+          label = string.format("%-40s (%s)", name, " Engine Template")
         })
         seen_classes[name] = true
       end
@@ -219,7 +219,7 @@ function M.run(opts)
               if not seen_classes[class_info.class_name] and not class_info.is_final and not class_info.is_interface then
                 table.insert(dynamic_choices, {
                   value = class_info.class_name,
-                  label = string.format("%-40s (%s) 📄 %s",
+                  label = string.format("%-40s (%s)   %s",
                     class_info.class_name,
                     class_info.base_class or "UObject",
                     vim.fn.fnamemodify(file_path, ":t"))
