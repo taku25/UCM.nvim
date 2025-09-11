@@ -1,12 +1,12 @@
--- lua/UCM/cmd/delete.lua (UIフローとコアロジックを統合)
+-- lua/UCM/cmd/delete.lua
 
-local unl_picker = require("UNL.backend.picker")
+-- (変更) 読み込むモジュールを新しい find_picker に変更
+local unl_find_picker = require("UNL.backend.find_picker")
 local cmd_core = require("UCM.cmd.core")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
 local unl_events = require("UNL.event.events")
 local unl_event_types = require("UNL.event.types")
-
 
 local function get_config()
   return require("UNL.config").get("UCM")
@@ -18,8 +18,6 @@ local M = {}
 -- Helper Functions
 -------------------------------------------------
 
----
--- (このヘルパー関数は前回の提案のままです)
 local function check_permissions(files_to_check)
   for _, path in ipairs(files_to_check) do
     local file, err = io.open(path, "a")
@@ -35,48 +33,54 @@ end
 -- Main Execution Flow (Core Logic)
 -------------------------------------------------
 
-local function execute_file_deletion(file_path)
-  -- (★新規) 失敗イベントの発行とエラーログをまとめたヘルパー関数
+local function execute_file_deletion(file_path, opts)
+  opts = opts or {}
+  local on_complete_callback = opts.on_complete
+
   local function publish_and_return_error(message)
-    unl_events.publish(unl_event_types.ON_AFTER_DELETE_CLASS_FILE, { status = "failed" })
+    local payload = { status = "failed", error = message }
+    unl_events.publish(unl_event_types.ON_AFTER_DELETE_CLASS_FILE, payload)
     log.get().error(message)
-    -- 呼び出し元で return するので、この関数は何も返さなくて良い
+
+    if on_complete_callback and type(on_complete_callback) == "function" then
+      vim.schedule(function()
+        on_complete_callback(false, payload)
+      end)
+    end
   end
 
-  -- 1. ヘッダーとソースのペアを解決
   local class_info, err = cmd_core.resolve_class_pair(file_path)
   if not class_info then
-    -- (★修正) ヘルパーを呼び出して早期リターン
     return publish_and_return_error(err)
   end
 
-  -- 2. 削除対象のファイルリストを作成
   local files_to_delete = {}
   if class_info.h then table.insert(files_to_delete, class_info.h) end
   if class_info.cpp then table.insert(files_to_delete, class_info.cpp) end
 
   if #files_to_delete == 0 then
-    -- このケースはエラーではないので、イベントは発行せず警告のみ
-    return log.get().warn("No existing class files found to delete for: " .. class_info.class_name)
+    local msg = "No existing class files found to delete for: " .. class_info.class_name
+    log.get().warn(msg)
+    if on_complete_callback and type(on_complete_callback) == "function" then
+      vim.schedule(function()
+        on_complete_callback(false, { status = "failed", error = msg })
+      end)
+    end
+    return
   end
 
-  -- 3. パーミッションを事前チェック
   local can_delete, perm_err = check_permissions(files_to_delete)
   if not can_delete then
-    -- (★修正) ヘルパーを呼び出して早期リターン
     return publish_and_return_error(perm_err)
   end
 
-  -- 4. ユーザーに最終確認
   local prompt_str = string.format("Permanently delete class '%s'?\n\n%s", class_info.class_name, table.concat(files_to_delete, "\n"))
   local yes_choice = "Yes, delete files"
   vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt_str }, function(choice)
-    -- ユーザーによるキャンセルは「失敗」ではないので、イベントは発行しない
     if choice ~= yes_choice then
       return log.get().info("Deletion canceled.")
     end
 
-    -- 5. 実際のファイル削除処理 (この中のロジックは変更なし)
     local all_deleted_successfully = true
     for _, path in ipairs(files_to_delete) do
       local ok, unlink_err = pcall(vim.loop.fs_unlink, path)
@@ -89,11 +93,16 @@ local function execute_file_deletion(file_path)
       end
     end
 
-    -- 6. 最終的な結果に基づいてイベントを発行
     local result_payload = {
       status = all_deleted_successfully and "success" or "failed"
     }
     unl_events.publish(unl_event_types.ON_AFTER_DELETE_CLASS_FILE, result_payload)
+
+    if on_complete_callback and type(on_complete_callback) == "function" then
+      vim.schedule(function()
+        on_complete_callback(all_deleted_successfully, result_payload)
+      end)
+    end
 
     if all_deleted_successfully then
       log.get().info("Successfully deleted class '%s'", class_info.class_name)
@@ -107,14 +116,11 @@ end
 -- Public API (Dispatcher)
 -------------------------------------------------
 
---- @param opts table: { file_path? }
 function M.run(opts)
   opts = opts or {}
 
-  -- Case 1: file_pathが引数で渡されている -> ダイレクト実行
   if opts.file_path then
     log.get().debug("Direct mode: UCM delete")
-    -- 拡張子がない場合も考慮して、実際のファイルパスを探す
     local actual_filepath
     if vim.fn.filereadable(opts.file_path) == 1 then
       actual_filepath = opts.file_path
@@ -127,36 +133,46 @@ function M.run(opts)
     elseif vim.fn.filereadable(opts.file_path .. ".inl") == 1 then
       actual_filepath = opts.file_path .. ".inl"
     end
-    
+
     if not actual_filepath then
-      return log.get().error("File not found: " .. opts.file_path)
+      local err_msg = "File not found: " .. opts.file_path
+      log.get().error(err_msg)
+      if opts.on_complete and type(opts.on_complete) == "function" then
+        vim.schedule(function()
+          opts.on_complete(false, { status = "failed", error = err_msg })
+        end)
+      end
+      return
     end
-    
-    execute_file_deletion(actual_filepath)
+
+    execute_file_deletion(actual_filepath, opts)
     return
   end
 
-  -- Case 2: file_pathがない -> UIでファイルを選択
   log.get().debug("UI mode: UCM delete")
 
-  
-
-
-  
-  -- UNLのPickerを呼び出して、ユーザーにファイルを選択させる
-  unl_picker.pick({
-    kind = "ucm_find_file_for_delete",
+  -- ▼▼▼ ここからが変更箇所 ▼▼▼
+  -- 汎用の unl_picker から、新しい unl_find_picker に呼び出し先を変更
+  unl_find_picker.pick({
     title = " Select Class File to Delete",
     conf = get_config(),
     logger_name = "UCM",
-    exec_cmd = cmd_core.get_fd_files_cmd(),
+    preview_enabled = true, -- <<< この行を追加！ (true/falseを切り替え可能)
+    exec_cmd = cmd_core.get_fd_files_cmd(), -- このコマンドが実行される
     on_submit = function(selected)
       if not selected then
-        return log.get().info("File selection canceled.")
+        -- ユーザーがピッカーをキャンセルした場合
+        log.get().info("File selection canceled.")
+        if opts.on_cancel and type(opts.on_cancel) == "function" then
+            pcall(opts.on_cancel)
+        end
+        return
       end
-      execute_file_deletion(selected)
+      -- ファイルが選択されたら、後続の処理を実行
+      execute_file_deletion(selected, opts)
     end,
   })
+  -- ▲▲▲ ここまでが変更箇所 ▲▲▲
 end
 
 return M

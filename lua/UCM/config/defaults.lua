@@ -18,6 +18,10 @@ local M = {
       mode = "auto",
       prefer = { "nvim-tree", "neo-tree", "native", "dummy"  },
     },
+    find_picker = {
+      mode = "auto",
+      prefer = { "telescope", "fzf-lua" }
+    },
     progress = {
       mode = "auto",
       enable = true,
@@ -30,7 +34,25 @@ local M = {
     localrc_filename = ".ucmrc",
   },
 
-
+  safe_open = {
+    -- A list of buffer types to avoid.
+    -- See `:help buftype` for more options.
+    prevent_in_buftypes = {
+      "nofile",
+      "quickfix",
+      "help",
+      "terminal",
+      "prompt",
+    },
+    -- A list of file types to avoid.
+    prevent_in_filetypes = {
+      "neo-tree",
+      "NvimTree",
+      "TelescopePrompt",
+      "fugitive",
+      "lazy",
+    },
+  },
   -- 'new'コマンド成功後、どのファイルを開くか
   -- "header": ヘッダーファイルのみ開く (デフォルト)
   -- "source": ソースファイルのみ開く

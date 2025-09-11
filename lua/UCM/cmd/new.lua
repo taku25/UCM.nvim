@@ -1,4 +1,4 @@
--- lua/UCM/cmd/new.lua (最終完成版)
+-- lua/UCM/cmd/new.lua
 
 local unl_picker = require("UNL.backend.picker")
 local selectors = require("UCM.selector")
@@ -8,18 +8,15 @@ local log = require("UCM.logger")
 local fs = require("vim.fs")
 local unl_events = require("UNL.event.events")
 local unl_event_types = require("UNL.event.types")
+local unl_open = require("UNL.buf.open") -- (追加) 新しいウィンドウヘルパーを読み込む
 
--- UNLの設定システムからこのプラグイン("UCM")用の設定を取得するヘルパー関数
 local function get_config()
   return require("UNL.config").get("UCM")
 end
 
 local M = {}
 
--------------------------------------------------
--- Private Helper Functions
--------------------------------------------------
-
+-- ... (process_template, write_file, validate_creation_operation は変更なし) ...
 local function process_template(template_path, replacements)
   if vim.fn.filereadable(template_path) ~= 1 then
     return nil, "Template file not found: " .. template_path
@@ -44,10 +41,6 @@ local function write_file(file_path, content)
   return true, nil
 end
 
----
--- ファイル作成操作が可能かを事前に検証する
--- @param validation_opts table { header_path, source_path, header_template, source_template }
--- @return boolean, string|nil
 local function validate_creation_operation(validation_opts)
   if vim.fn.filereadable(validation_opts.header_path) == 1 or vim.fn.filereadable(validation_opts.source_path) == 1 then
     return false, "One or both class files already exist at the destination."
@@ -68,17 +61,22 @@ local function validate_creation_operation(validation_opts)
   end
   return true, nil
 end
-
 -------------------------------------------------
 -- Main Execution Flow (Core Logic)
 -------------------------------------------------
 
 local function execute_file_creation(opts)
   local conf = get_config()
+  local on_complete_callback = opts.on_complete
 
   local function publish_and_return_error(message)
     unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, { status = "failed" })
     log.get().error(message)
+    if on_complete_callback and type(on_complete_callback) == "function" then
+      vim.schedule(function()
+        on_complete_callback(false, { status = "failed", error = message })
+      end)
+    end
   end
 
   local context, err = cmd_core.resolve_creation_context(opts.target_dir)
@@ -94,7 +92,7 @@ local function execute_file_creation(opts)
   local source_path = fs.joinpath(context.source_dir, opts.class_name .. ".cpp")
   local header_template_path = fs.joinpath(template_base_path, template_def.header_template)
   local source_template_path = fs.joinpath(template_base_path, template_def.source_template)
-  
+
   local is_valid, validation_err = validate_creation_operation({
     header_path = header_path,
     source_path = source_path,
@@ -103,35 +101,24 @@ local function execute_file_creation(opts)
   })
   if not is_valid then return publish_and_return_error(validation_err) end
 
-  -- ▼▼▼ この replacements テーブルの構築ロジックが最終修正箇所です ▼▼▼
-  
-  -- 新しいクラスに付けるプレフィックスを決定
-  local new_class_prefix = (template_def and template_def.class_prefix) 
-                             or (opts.parent_class:match("^[AUFIS]")) 
-                             or "U"
-  
+  local new_class_prefix = (template_def and template_def.class_prefix)
+    or (opts.parent_class:match("^[AUFIS]"))
+    or "U"
+
   local replacements = {
     CLASS_NAME = opts.class_name,
     API_MACRO = context.module.name:upper() .. "_API",
     CLASS_PREFIX = new_class_prefix,
-
-    -- ★★★ 常にユーザーが選択した親クラスを最優先で使用する ★★★
     BASE_CLASS_NAME = opts.parent_class,
-    
     UCLASS_SPECIFIER = (template_def and template_def.uclass_specifier) or "",
-    
-    -- include文は、静的ルールにマッチした場合のみその定義を使い、
-    -- そうでなければ親クラス名から推測する
     DIRECT_INCLUDES = (template_def and template_def.priority > 10 and template_def.direct_includes and #template_def.direct_includes > 0)
-                      and ("#include " .. table.concat(template_def.direct_includes, "\n#include "))
-                      or ('#include "' .. opts.parent_class .. '.h"'),
+        and ("#include " .. table.concat(template_def.direct_includes, "\n#include "))
+      or ('#include "' .. opts.parent_class .. '.h"'),
   }
-  
-  -- ▲▲▲ 修正ここまで ▲▲▲
 
   local header_content, h_err = process_template(header_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = conf.copyright_header_h }, replacements))
   if not header_content then return publish_and_return_error(h_err) end
-  
+
   local source_content, s_err = process_template(source_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = conf.copyright_header_cpp }, replacements))
   if not source_content then return publish_and_return_error(s_err) end
 
@@ -144,27 +131,38 @@ local function execute_file_creation(opts)
     return publish_and_return_error("Failed to write source file: " .. err_s)
   end
 
-  unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, {
+  local success_payload = {
     status = "success",
     header_path = header_path,
     source_path = source_path,
     template_used = template_def.name,
-  })
+  }
+  unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, success_payload)
+
+  if on_complete_callback and type(on_complete_callback) == "function" then
+    vim.schedule(function()
+      on_complete_callback(true, success_payload)
+    end)
+  end
 
   log.get().info("Successfully created class: " .. opts.class_name)
+
+  -- ▼▼▼ ここからが変更箇所 ▼▼▼
+  -- 既存の vim.cmd("edit ...") などを新しいヘルパーに置き換える
   local open_setting = conf.auto_open_on_new
-  if open_setting == "header" then vim.cmd("edit " .. vim.fn.fnameescape(header_path))
-  elseif open_setting == "source" then vim.cmd("edit " .. vim.fn.fnameescape(source_path))
+  if open_setting == "header" then
+    unl_open.safe({ file_path = header_path, open_cmd = "edit", plugin_name = "UCM" })
+  elseif open_setting == "source" then
+    unl_open.safe({ file_path = source_path, open_cmd = "edit", plugin_name = "UCM" })
   elseif open_setting == "both" then
-    vim.cmd("edit " .. vim.fn.fnameescape(header_path))
-    vim.cmd("vsplit " .. vim.fn.fnameescape(source_path))
+    -- 'both' の場合は、1つ目を 'edit' で開き、2つ目を 'vsplit' で開くのが一般的
+    unl_open.safe({ file_path = header_path, open_cmd = "edit", plugin_name = "UCM" })
+    unl_open.safe({ file_path = source_path, open_cmd = "vsplit", plugin_name = "UCM" })
   end
+  -- ▲▲▲ ここまでが変更箇所 ▲▲▲
 end
 
--------------------------------------------------
--- Public API (Dispatcher)
--------------------------------------------------
-
+-- ... (M.run 関数は変更なし) ...
 function M.run(opts)
   opts = opts or {}
 
@@ -174,10 +172,11 @@ function M.run(opts)
       class_name = opts.class_name,
       parent_class = opts.parent_class,
       target_dir = opts.target_dir or vim.loop.cwd(),
+      on_complete = opts.on_complete, -- (追加) コールバックを direct mode に引き継ぐ
     }
     local conf = get_config()
     if not conf.confirm_on_new then
-        final_opts.skip_confirmation = true
+      final_opts.skip_confirmation = true
     end
     execute_file_creation(final_opts)
     return
@@ -185,18 +184,16 @@ function M.run(opts)
 
   log.get().debug("UI mode: UCM new")
   local base_dir = opts.target_dir or vim.loop.cwd()
-  
-  local collected_opts = {}
 
-  -- UI Flow Step 2: 親クラスを選択
- local function ask_for_parent_class()
+  -- (変更) UIフローでコールバックを保持・引き継ぐ
+  local collected_opts = {
+    on_complete = opts.on_complete,
+  }
+
+  local function ask_for_parent_class()
     local conf = get_config()
-
-    -- ★★★ ここからが、静的リストと動的リストをマージする新しいロジックです ★★★
-
-    -- Step 1: UCMが元々持っている静的なテンプレートリストを準備
     local static_choices = {}
-    local seen_classes = {} -- ★ 重複防止用のテーブル
+    local seen_classes = {}
     for _, rule in ipairs(conf.template_rules) do
       local name = rule.base_class_name
       if name and not seen_classes[name] then
@@ -208,7 +205,6 @@ function M.run(opts)
       end
     end
 
-    -- Step 2: UEPプロバイダーから動的なクラスリストの取得を試みる
     local dynamic_choices = {}
     local unl_api_ok, unl_api = pcall(require, "UNL.api")
     if unl_api_ok then
@@ -220,16 +216,14 @@ function M.run(opts)
         for file_path, details in pairs(header_details) do
           if details.classes then
             for _, class_info in ipairs(details.classes) do
-              -- 静的リストにまだないクラスのみを追加する
               if not seen_classes[class_info.class_name] and not class_info.is_final and not class_info.is_interface then
                 table.insert(dynamic_choices, {
                   value = class_info.class_name,
-                  label = string.format("%-40s (%s) 📄 %s", 
-                                        class_info.class_name, 
-                                        class_info.base_class or "UObject", 
-                                        vim.fn.fnamemodify(file_path, ":t"))
+                  label = string.format("%-40s (%s) 📄 %s",
+                    class_info.class_name,
+                    class_info.base_class or "UObject",
+                    vim.fn.fnamemodify(file_path, ":t"))
                 })
-                -- 動的リストに追加したものも、seen_classesに記録しておく
                 seen_classes[class_info.class_name] = true
               end
             end
@@ -242,25 +236,21 @@ function M.run(opts)
       log.get().info("UNL.api not available. Using static template list only.")
     end
 
-    -- Step 3: 静的リストと動的リストを結合し、ソートする
-    -- ユーザーのカスタムクラスが上に来る方が便利なので、動的リストを先に結合する
     table.sort(dynamic_choices, function(a, b) return a.value < b.value end)
     table.sort(static_choices, function(a, b) return a.value < b.value end)
     local all_choices = vim.list_extend(dynamic_choices, static_choices)
 
-    -- Step 4: 結合したリストでPickerを表示する
     unl_picker.pick({
       kind = "ucm_select_parent_class_combined",
       title = "  Select Parent Class",
-      items = all_choices, -- ★ 結合したリストを渡す
+      items = all_choices,
       conf = conf,
       logger_name = "UCM",
-      preview_enabled = false, 
+      preview_enabled = false,
       on_submit = function(selected)
         if not selected then return log.get().info("Class creation canceled.") end
         collected_opts.parent_class = selected
-        
-        -- (以降の確認UIとexecute_file_creation呼び出しのロジックは変更なし)
+
         if not conf.confirm_on_new then
           execute_file_creation(collected_opts)
         else
@@ -278,7 +268,6 @@ function M.run(opts)
     })
   end
 
-  -- UI Flow Step 1: クラス名とパスを入力
   local function ask_for_class_name_and_path()
     vim.ui.input({ prompt = "Enter Class Name (e.g., MyClass or path/to/MyClass):" }, function(user_input)
       if not user_input or user_input == "" then
@@ -302,6 +291,11 @@ function M.run(opts)
 
       if not context then
         log.get().error(err)
+        if collected_opts.on_complete and type(collected_opts.on_complete) == "function" then
+          vim.schedule(function()
+            collected_opts.on_complete(false, { status = "failed", error = err })
+          end)
+        end
         return
       end
       ask_for_parent_class()
@@ -310,5 +304,6 @@ function M.run(opts)
 
   ask_for_class_name_and_path()
 end
+
 
 return M

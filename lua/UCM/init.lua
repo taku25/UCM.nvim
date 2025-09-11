@@ -9,6 +9,10 @@ function M.setup(user_opts)
   -- 設定とロガーの両方を初期化します。
   unl_log.setup("UCM", ucm_defaults, user_opts or {})
   
+
+
+  require("UCM.provider").setup()
+
   local log = unl_log.get("UCM")
   if log then
     log.debug("UCM.nvim setup complete.")
