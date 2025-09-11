@@ -136,6 +136,7 @@ local function execute_file_creation(opts)
     header_path = header_path,
     source_path = source_path,
     template_used = template_def.name,
+    module = context.module,
   }
   unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, success_payload)
 
