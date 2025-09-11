@@ -15,7 +15,7 @@ function M.request(opts)
   local log = require("UNL.logging").get("UCM")
   log.debug("Provider 'ucm.class.rename' called with opts: %s", vim.inspect(opts))
 
-  local ok, result = pcall(ucm_api.rename, opts)
+  local ok, result = pcall(ucm_api.rename_class, opts)
   if not ok then
     log.error("Provider 'ucm.class.rename' failed: %s", tostring(result))
     return false, result

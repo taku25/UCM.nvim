@@ -8,15 +8,16 @@ local log = require("UCM.logger")
 local fs = require("vim.fs")
 local unl_events = require("UNL.event.events")
 local unl_event_types = require("UNL.event.types")
-local unl_open = require("UNL.buf.open") -- (追加) 新しいウィンドウヘルパーを読み込む
+-- (変更) 正しいモジュールを読み込む
+local open_util = require("UNL.buf.open")
 
+-- ... (これより上の部分は変更なし) ...
 local function get_config()
   return require("UNL.config").get("UCM")
 end
 
 local M = {}
 
--- ... (process_template, write_file, validate_creation_operation は変更なし) ...
 local function process_template(template_path, replacements)
   if vim.fn.filereadable(template_path) ~= 1 then
     return nil, "Template file not found: " .. template_path
@@ -61,13 +62,33 @@ local function validate_creation_operation(validation_opts)
   end
   return true, nil
 end
--------------------------------------------------
--- Main Execution Flow (Core Logic)
--------------------------------------------------
 
-local function execute_file_creation(opts)
-  local conf = get_config()
-  local on_complete_callback = opts.on_complete
+local function prepare_creation_plan(opts, conf)
+  local context, err = cmd_core.resolve_creation_context(opts.target_dir)
+  if not context then return nil, err end
+
+  local template_def = selectors.template.select(opts.parent_class, conf)
+  if not template_def then return nil, "No suitable template found for: " .. opts.parent_class end
+
+  local template_base_path = path.get_template_base_path(template_def, "UCM")
+  if not template_base_path then return nil, "Could not determine template base path." end
+
+  local header_path = fs.joinpath(context.header_dir, opts.class_name .. ".h")
+  local source_path = fs.joinpath(context.source_dir, opts.class_name .. ".cpp")
+
+  return {
+    opts = opts,
+    conf = conf,
+    context = context,
+    template_def = template_def,
+    template_base_path = template_base_path,
+    header_path = header_path,
+    source_path = source_path,
+  }, nil
+end
+
+local function execute_file_creation(plan)
+  local on_complete_callback = plan.opts.on_complete
 
   local function publish_and_return_error(message)
     unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, { status = "failed" })
@@ -79,64 +100,53 @@ local function execute_file_creation(opts)
     end
   end
 
-  local context, err = cmd_core.resolve_creation_context(opts.target_dir)
-  if not context then return publish_and_return_error(err) end
-
-  local template_def = selectors.template.select(opts.parent_class, conf)
-  if not template_def then return publish_and_return_error("No suitable template found for: " .. opts.parent_class) end
-
-  local template_base_path = path.get_template_base_path(template_def, "UCM")
-  if not template_base_path then return publish_and_return_error("Could not determine template base path.") end
-
-  local header_path = fs.joinpath(context.header_dir, opts.class_name .. ".h")
-  local source_path = fs.joinpath(context.source_dir, opts.class_name .. ".cpp")
-  local header_template_path = fs.joinpath(template_base_path, template_def.header_template)
-  local source_template_path = fs.joinpath(template_base_path, template_def.source_template)
+  local header_template_path = fs.joinpath(plan.template_base_path, plan.template_def.header_template)
+  local source_template_path = fs.joinpath(plan.template_base_path, plan.template_def.source_template)
 
   local is_valid, validation_err = validate_creation_operation({
-    header_path = header_path,
-    source_path = source_path,
+    header_path = plan.header_path,
+    source_path = plan.source_path,
     header_template = header_template_path,
     source_template = source_template_path,
   })
   if not is_valid then return publish_and_return_error(validation_err) end
 
-  local new_class_prefix = (template_def and template_def.class_prefix)
-    or (opts.parent_class:match("^[AUFIS]"))
+  local new_class_prefix = (plan.template_def and plan.template_def.class_prefix)
+    or (plan.opts.parent_class:match("^[AUFIS]"))
     or "U"
 
   local replacements = {
-    CLASS_NAME = opts.class_name,
-    API_MACRO = context.module.name:upper() .. "_API",
+    CLASS_NAME = plan.opts.class_name,
+    API_MACRO = plan.context.module.name:upper() .. "_API",
     CLASS_PREFIX = new_class_prefix,
-    BASE_CLASS_NAME = opts.parent_class,
-    UCLASS_SPECIFIER = (template_def and template_def.uclass_specifier) or "",
-    DIRECT_INCLUDES = (template_def and template_def.priority > 10 and template_def.direct_includes and #template_def.direct_includes > 0)
-        and ("#include " .. table.concat(template_def.direct_includes, "\n#include "))
-      or ('#include "' .. opts.parent_class .. '.h"'),
+    BASE_CLASS_NAME = plan.opts.parent_class,
+    UCLASS_SPECIFIER = (plan.template_def and plan.template_def.uclass_specifier) or "",
+    DIRECT_INCLUDES = (plan.template_def and plan.template_def.priority > 10 and plan.template_def.direct_includes and #plan.template_def.direct_includes > 0)
+        and ("#include " .. table.concat(plan.template_def.direct_includes, "\n#include "))
+      or ('#include "' .. plan.opts.parent_class .. '.h"'),
   }
 
-  local header_content, h_err = process_template(header_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = conf.copyright_header_h }, replacements))
+  local header_content, h_err = process_template(header_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = plan.conf.copyright_header_h }, replacements))
   if not header_content then return publish_and_return_error(h_err) end
 
-  local source_content, s_err = process_template(source_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = conf.copyright_header_cpp }, replacements))
+  local source_content, s_err = process_template(source_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = plan.conf.copyright_header_cpp }, replacements))
   if not source_content then return publish_and_return_error(s_err) end
 
-  local ok_h, err_h = write_file(header_path, header_content)
+  local ok_h, err_h = write_file(plan.header_path, header_content)
   if not ok_h then return publish_and_return_error("Failed to write header file: " .. err_h) end
 
-  local ok_s, err_s = write_file(source_path, source_content)
+  local ok_s, err_s = write_file(plan.source_path, source_content)
   if not ok_s then
-    pcall(vim.loop.fs_unlink, header_path)
+    pcall(vim.loop.fs_unlink, plan.header_path)
     return publish_and_return_error("Failed to write source file: " .. err_s)
   end
 
   local success_payload = {
     status = "success",
-    header_path = header_path,
-    source_path = source_path,
-    template_used = template_def.name,
-    module = context.module,
+    header_path = plan.header_path,
+    source_path = plan.source_path,
+    template_used = plan.template_def.name,
+    module = plan.context.module,
   }
   unl_events.publish(unl_event_types.ON_AFTER_NEW_CLASS_FILE, success_payload)
 
@@ -146,26 +156,26 @@ local function execute_file_creation(opts)
     end)
   end
 
-  log.get().info("Successfully created class: " .. opts.class_name)
+  log.get().info("Successfully created class: " .. plan.opts.class_name)
 
-  -- ▼▼▼ ここからが変更箇所 ▼▼▼
-  -- 既存の vim.cmd("edit ...") などを新しいヘルパーに置き換える
-  local open_setting = conf.auto_open_on_new
+  -- ▼▼▼ ここからが今回の修正箇所 ▼▼▼
+  local open_setting = plan.conf.auto_open_on_new
   if open_setting == "header" then
-    unl_open.safe({ file_path = header_path, open_cmd = "edit", plugin_name = "UCM" })
+    open_util.safe({ file_path = plan.header_path, open_cmd = "edit", plugin_name = "UCM" })
   elseif open_setting == "source" then
-    unl_open.safe({ file_path = source_path, open_cmd = "edit", plugin_name = "UCM" })
+    open_util.safe({ file_path = plan.source_path, open_cmd = "edit", plugin_name = "UCM" })
   elseif open_setting == "both" then
-    -- 'both' の場合は、1つ目を 'edit' で開き、2つ目を 'vsplit' で開くのが一般的
-    unl_open.safe({ file_path = header_path, open_cmd = "edit", plugin_name = "UCM" })
-    unl_open.safe({ file_path = source_path, open_cmd = "vsplit", plugin_name = "UCM" })
+    open_util.safe({ file_path = plan.header_path, open_cmd = "edit", plugin_name = "UCM" })
+    open_util.safe({ file_path = plan.source_path, open_cmd = "vsplit", plugin_name = "UCM" })
   end
-  -- ▲▲▲ ここまでが変更箇所 ▲▲▲
+  -- ▲▲▲ ここまでが今回の修正箇所 ▲▲▲
 end
 
--- ... (M.run 関数は変更なし) ...
+
+-- ... (これより下の M.run 関数は変更なし) ...
 function M.run(opts)
   opts = opts or {}
+  local conf = get_config()
 
   if opts.class_name and opts.parent_class then
     log.get().debug("Direct mode: UCM new")
@@ -173,26 +183,39 @@ function M.run(opts)
       class_name = opts.class_name,
       parent_class = opts.parent_class,
       target_dir = opts.target_dir or vim.loop.cwd(),
-      on_complete = opts.on_complete, -- (追加) コールバックを direct mode に引き継ぐ
+      on_complete = opts.on_complete,
     }
-    local conf = get_config()
-    if not conf.confirm_on_new then
-      final_opts.skip_confirmation = true
+
+    local plan, err = prepare_creation_plan(final_opts, conf)
+    if err then
+      if final_opts.on_complete then
+        pcall(final_opts.on_complete, false, { error = err })
+      end
+      return log.get().error(err)
     end
-    execute_file_creation(final_opts)
+
+    if not conf.confirm_on_new then
+        execute_file_creation(plan)
+    else
+      local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
+        plan.opts.class_name, plan.header_path, plan.source_path)
+      local yes_choice = "Yes, create files"
+      vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt }, function(choice)
+        if choice == yes_choice then
+          execute_file_creation(plan)
+        else
+          log.get().info("Class creation canceled.")
+        end
+      end)
+    end
     return
   end
 
   log.get().debug("UI mode: UCM new")
   local base_dir = opts.target_dir or vim.loop.cwd()
-
-  -- (変更) UIフローでコールバックを保持・引き継ぐ
-  local collected_opts = {
-    on_complete = opts.on_complete,
-  }
+  local collected_opts = { on_complete = opts.on_complete }
 
   local function ask_for_parent_class()
-    local conf = get_config()
     local static_choices = {}
     local seen_classes = {}
     for _, rule in ipairs(conf.template_rules) do
@@ -200,7 +223,7 @@ function M.run(opts)
       if name and not seen_classes[name] then
         table.insert(static_choices, {
           value = name,
-          label = string.format("%-40s (%s)", name, " Engine Template")
+          label = string.format("%-40s (%s)", name, "   Engine Template")
         })
         seen_classes[name] = true
       end
@@ -251,15 +274,24 @@ function M.run(opts)
       on_submit = function(selected)
         if not selected then return log.get().info("Class creation canceled.") end
         collected_opts.parent_class = selected
-
+        
+        local plan, err = prepare_creation_plan(collected_opts, conf)
+        if err then
+          if collected_opts.on_complete then
+            pcall(collected_opts.on_complete, false, { error = err })
+          end
+          return log.get().error(err)
+        end
+        
         if not conf.confirm_on_new then
-          execute_file_creation(collected_opts)
+          execute_file_creation(plan)
         else
-          local prompt = ("Create class '%s' with parent '%s'?"):format(collected_opts.class_name, collected_opts.parent_class)
+          local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
+            plan.opts.class_name, plan.header_path, plan.source_path)
           local yes_choice = "Yes, create files"
           vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt }, function(choice)
             if choice == yes_choice then
-              execute_file_creation(collected_opts)
+              execute_file_creation(plan)
             else
               log.get().info("Class creation canceled.")
             end

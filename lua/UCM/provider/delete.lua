@@ -15,7 +15,7 @@ function M.request(opts)
   local log = require("UNL.logging").get("UCM")
   log.debug("Provider 'ucm.class.delete' called with opts: %s", vim.inspect(opts))
 
-  local ok, result = pcall(ucm_api.delete, opts)
+  local ok, result = pcall(ucm_api.delete_class, opts)
   if not ok then
     log.error("Provider 'ucm.class.delete' failed: %s", tostring(result))
     return false, result

@@ -15,7 +15,7 @@ function M.request(opts)
   local log = require("UNL.logging").get("UCM")
   log.debug("Provider 'ucm.class.move' called with opts: %s", vim.inspect(opts))
 
-  local ok, result = pcall(ucm_api.move, opts)
+  local ok, result = pcall(ucm_api.move_class, opts)
   if not ok then
     log.error("Provider 'ucm.class.move' failed: %s", tostring(result))
     return false, result

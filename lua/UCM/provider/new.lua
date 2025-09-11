@@ -18,7 +18,7 @@ local log = require("UNL.logging").get("UCM")
   -- ucm_api.new に処理を委譲する
   -- ucm_api.new が pcall で保護されているか、
   -- もしくはここで pcall を使うのが望ましい
-  local ok, result = pcall(ucm_api.new, opts)
+  local ok, result = pcall(ucm_api.new_class, opts)
   if not ok then
     log.error("Provider 'ucm.class.new' failed: %s", tostring(result))
     return false, result -- エラーメッセージをそのまま返す
