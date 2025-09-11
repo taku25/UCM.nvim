@@ -1,11 +1,11 @@
 -- lua/UCM/provider/init.lua
 
-local log = require("UNL.logging").get("UCM.nvim")
 
 local M = {}
 
 -- プロバイダーの登録処理
 function M.setup()
+  local log = require("UNL.logging").get("UCM")
   -- UNL.provider が利用可能かチェック
   local unl_provider_ok, provider = pcall(require, "UNL.provider")
   if not unl_provider_ok then

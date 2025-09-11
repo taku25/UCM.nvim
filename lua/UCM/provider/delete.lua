@@ -1,7 +1,6 @@
 -- lua/UCM/provider/delete.lua
 
 local ucm_api = require("UCM.api")
-local log = require("UNL.logging").get("UCM.nvim")
 
 local M = {}
 
@@ -12,6 +11,8 @@ local M = {}
 --   - (その他、UCM.api.delete が要求するオプション)
 -- @return boolean, any: 成功時は true と結果、失敗時は false とエラーメッセージ
 function M.request(opts)
+
+  local log = require("UNL.logging").get("UCM")
   log.debug("Provider 'ucm.class.delete' called with opts: %s", vim.inspect(opts))
 
   local ok, result = pcall(ucm_api.delete, opts)
