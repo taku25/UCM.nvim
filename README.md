@@ -2,17 +2,18 @@
 
 # Unreal Class Manager 💓 Neovim
 
-\<table\>
-  \<tr\>
-   \<td\>\<div align=center\>\<img width="100%" alt="UCM New Class Interactive Demo" src="[https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-new.png](https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-new.png)" /\>\</div\>\</td\>
-   \<td\>\<div align=center\>\<img width="100%" alt="UCM Rename Class Interactive Demo" src="[https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-delete.png](https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-delete.png)" /\>\</div\>\</td\>
-  \</tr\>
-\</table\>
+
+<table>
+  <tr>
+   <td><div align=center><img width="100%" alt="UCM New Class Interactive Demo" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-new.png" /></div></td>
+   <td><div align=center><img width="100%" alt="UCM Rename Class Interactive Demo" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-delete.png" /></div></td>
+  </tr>
+</table>
 
 `UCM.nvim` is a plugin for managing your Unreal Engine C++ classes (creation, file switching, renaming, deletion) from within Neovim.
-Your workflow will be enhanced by using it alongside [UBT.nvim](https://github.com/taku25/UBT.nvim) and [UEP.nvim](https://github.com/taku25/UEP.nvim).
+Check out other plugins to enhance Unreal Engine development: ([`UEP.nvim`](https://github.com/taku25/UEP.nvim), [`UBT.nvim`](https://github.com/taku25/UBT.nvim), [`ULG.nvim`](https://github.com/taku25/ULG.nvim), [`neo-tree-unl.nvim`](https://github.com/taku25/neo-tree-unl.nvim)).
 
-[English](https://www.google.com/search?q=./README.md) | [日本語 (Japanese)](https://www.google.com/search?q=./README_ja.md)
+[English](./README.md) | [日本語 (Japanese)](./README_ja.md)
 
 -----
 
@@ -26,22 +27,24 @@ Your workflow will be enhanced by using it alongside [UBT.nvim](https://github.c
       * For `new`, `rename`, and `delete` commands, UI frontends like [Telescope](https://github.com/nvim-telescope/telescope.nvim) or [fzf-lua](https://github.com/ibhagwan/fzf-lua) are automatically detected and used.
       * It's also possible to specify one explicitly. If neither is installed, the native Neovim UI is used as a fallback.
 
-\<table\>
-  \<tr\>
-   \<td\>
-   \<div align=center\>
-   \<img width="100%" alt="UCM new gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-new.gif" /\>\<br\>
-   \<code\>:UCM new\</code\> command
-   \</div\>
-   \</td\>
-   \<td\>
-   \<div align=center\>
-   \<img width="100%" alt="UCM rename gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-rename.gif" /\>\<br\>
-   \<code\>:UCM rename\</code\> command
-   \</div\>
-   \</td\>
-  \</tr\>
-\</table\>
+<table>
+  <tr>
+   <td>
+   <div align=center>
+   <img width="100%" alt="UCM new gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-new.gif" /><br>
+   <code>:UCM new</code> コマンド
+   </div>
+   </td>
+   <td>
+   <div align=center>
+   <img width="100%" alt="UCM rename gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-rename.gif" /><br>
+   <code>:UCM rename</code> コマンド
+   </div>
+   </td>
+  </tr>
+</table>
+
+
 
 ## 🔧 Requirements
 
