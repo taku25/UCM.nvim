@@ -7,6 +7,7 @@ local log = require("UCM.logger")
 local fs = require("vim.fs")
 local unl_events = require("UNL.event.events")
 local unl_event_types = require("UNL.event.types")
+local unl_finder = require("UNL.finder")
 
 local function get_config()
   return require("UNL.config").get("UCM")
@@ -58,6 +59,7 @@ local function execute_file_move(opts)
     end
   end
 
+  local module = unl_finder.module.find_module(opts.file_path)
   local class_info, err = cmd_core.resolve_class_pair(opts.file_path)
   if not class_info then return publish_and_return_error(err) end
 
@@ -107,6 +109,7 @@ local function execute_file_move(opts)
     local result_payload = {
       status = all_moved_successfully and "success" or "failed",
       operations = operations,
+      module = module,
     }
     unl_events.publish(unl_event_types.ON_AFTER_MOVE_CLASS_FILE, result_payload)
 
@@ -128,46 +131,56 @@ end
 -- Public API (Dispatcher)
 -------------------------------------------------
 
+local function ask_for_destination_and_execute(source_file, original_opts)
+  -- find_picker を使って移動先のディレクトリを選択させる
+  unl_find_picker.pick({
+    title = "  Select Destination for '" .. vim.fn.fnamemodify(source_file, ":t:r") .. "'",
+    conf = get_config(),
+    logger_name = "UCM",
+    exec_cmd = cmd_core.get_fd_directory_cmd(),
+    preview_enabled = false,
+    on_submit = function(selected_dir)
+      if not selected_dir then
+        log.get().info("Destination selection canceled.")
+        if original_opts.on_cancel then pcall(original_opts.on_cancel) end
+        return
+      end
+      
+      -- 元のオプションと新しい情報をマージして、コアロジックに渡す
+      local final_opts = vim.deepcopy(original_opts)
+      final_opts.file_path = source_file
+      final_opts.target_dir = selected_dir
+      
+      execute_file_move(final_opts)
+    end,
+  })
+end
+
+
+---
+-- Public API (Dispatcher) - 3つのシナリオを捌くように修正
 function M.run(opts)
   opts = opts or {}
+  log.get().debug("UCM move called with opts: %s", vim.inspect(opts))
 
+  -- シナリオ3: 非UIモード (API/テスト用)
   if opts.file_path and opts.target_dir then
     log.get().debug("Direct mode: UCM move")
-    return execute_file_move(opts)
+    execute_file_move(opts)
+    return
   end
 
+  -- シナリオ2: 半UIモード (neo-treeからの呼び出し)
+  if opts.file_path then
+    log.get().debug("Semi-interactive mode: file_path provided, asking for destination.")
+    ask_for_destination_and_execute(opts.file_path, opts)
+    return
+  end
+
+  -- シナリオ1: 完全UIモード (ユーザーが:UCM moveを実行)
   log.get().debug("UI mode: UCM move")
-  local collected_opts = {
-    on_complete = opts.on_complete,
-    on_cancel = opts.on_cancel,
-  }
-
-  -- UIフロー (find_picker を使用)
-  local function ask_for_destination(source_file)
-    collected_opts.file_path = source_file
-    
-    -- (変更) find_picker を使って移動先のディレクトリを選択させる
-    unl_find_picker.pick({
-      title = "  Select Destination Directory for '" .. vim.fn.fnamemodify(source_file, ":t:r") .. "'",
-      conf = get_config(),
-      logger_name = "UCM",
-      -- (注意) ディレクトリ検索用のコマンドに変更
-      exec_cmd = cmd_core.get_fd_directory_cmd(),
-      -- プレビューはディレクトリなので不要
-      preview_enabled = false,
-      on_submit = function(selected_dir)
-        if not selected_dir then
-          log.get().info("Directory selection canceled.")
-          if collected_opts.on_cancel then pcall(collected_opts.on_cancel) end
-          return
-        end
-        collected_opts.target_dir = selected_dir
-        execute_file_move(collected_opts)
-      end,
-    })
-  end
   
-  -- (変更) find_picker を使って移動元のファイルを選択させる
+  -- find_picker を使って移動元のファイルを選択させる
   unl_find_picker.pick({
     title = " Select Class File to Move",
     conf = get_config(),
@@ -177,10 +190,12 @@ function M.run(opts)
     on_submit = function(selected_file)
       if not selected_file then
         log.get().info("File selection canceled.")
-        if collected_opts.on_cancel then pcall(collected_opts.on_cancel) end
+        if opts.on_cancel then pcall(opts.on_cancel) end
         return
       end
-      ask_for_destination(selected_file)
+      
+      -- ファイルが選択されたら、ヘルパー関数を呼び出して次のステップへ
+      ask_for_destination_and_execute(selected_file, opts)
     end,
   })
 end

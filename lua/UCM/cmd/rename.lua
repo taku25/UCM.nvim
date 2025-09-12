@@ -2,6 +2,8 @@
 
 -- (変更) 読み込むモジュールを新しい find_picker に変更
 local unl_find_picker = require("UNL.backend.find_picker")
+
+local unl_finder = require("UNL.finder")
 local cmd_core = require("UCM.cmd.core")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
@@ -69,6 +71,7 @@ local function execute_file_rename(opts)
     end
   end
 
+  local module = unl_finder.module.find_module(opts.file_path)
   local class_info, err = cmd_core.resolve_class_pair(opts.file_path)
   if not class_info then return publish_and_return_error(err) end
 
@@ -123,6 +126,7 @@ local function execute_file_rename(opts)
       status = "success",
       old_class_name = old_class_name,
       new_class_name = new_class_name,
+      module = module,
     }
     unl_events.publish(unl_event_types.ON_AFTER_RENAME_CLASS_FILE, success_payload)
 
@@ -139,22 +143,52 @@ end
 -- Public API (Dispatcher)
 -------------------------------------------------
 
+local function ask_for_new_name_and_execute(file_path, original_opts)
+  local old_name = vim.fn.fnamemodify(file_path, ":t:r")
+  
+  vim.ui.input({ prompt = "Enter New Class Name:", default = old_name }, function(new_name)
+    if not new_name or new_name == "" or new_name == old_name then
+      log.get().info("Rename canceled.")
+      -- ユーザーがキャンセルした場合、on_cancelコールバックを呼ぶのが親切
+      if original_opts.on_cancel and type(original_opts.on_cancel) == "function" then
+        pcall(original_opts.on_cancel)
+      end
+      return
+    end
+    
+    -- 元のオプションと新しい情報をマージして、コアロジックに渡す
+    local final_opts = vim.deepcopy(original_opts)
+    final_opts.file_path = file_path
+    final_opts.new_class_name = new_name
+    
+    execute_file_rename(final_opts)
+  end)
+end
+
+
+---
+-- Public API (Dispatcher) - 3つのシナリオを捌くように修正
 function M.run(opts)
   opts = opts or {}
+  log.get().debug("UCM rename called with opts: %s", vim.inspect(opts))
 
+  -- シナリオ3: 非UIモード (API/テスト用)
   if opts.file_path and opts.new_class_name then
     log.get().debug("Direct mode: UCM rename")
     execute_file_rename(opts)
     return
   end
 
+  -- シナリオ2: 半UIモード (neo-treeからの呼び出し)
+  if opts.file_path then
+    log.get().debug("Semi-interactive mode: file_path provided, asking for new name.")
+    ask_for_new_name_and_execute(opts.file_path, opts)
+    return
+  end
+
+  -- シナリオ1: 完全UIモード (ユーザーが:UCM renameを実行)
   log.get().debug("UI mode: UCM rename")
-  local collected_opts = {
-    on_complete = opts.on_complete,
-    on_cancel = opts.on_cancel,
-  }
   
-  -- (変更) UIフローを find_picker で再構築
   unl_find_picker.pick({
     title = "  Select Class File to Rename",
     conf = get_config(),
@@ -164,23 +198,12 @@ function M.run(opts)
     on_submit = function(selected_file)
       if not selected_file then
         log.get().info("File selection canceled.")
-        if collected_opts.on_cancel then pcall(collected_opts.on_cancel) end
+        if opts.on_cancel then pcall(opts.on_cancel) end
         return
       end
       
-      collected_opts.file_path = selected_file
-      
-      local old_name = vim.fn.fnamemodify(selected_file, ":t:r")
-      vim.ui.input({ prompt = "Enter New Class Name:", default = old_name }, function(new_name)
-        if not new_name or new_name == "" then
-          log.get().info("Rename canceled.")
-          if collected_opts.on_cancel then pcall(collected_opts.on_cancel) end
-          return
-        end
-        
-        collected_opts.new_class_name = new_name
-        execute_file_rename(collected_opts)
-      end)
+      -- ファイルが選択されたら、ヘルパー関数を呼び出して次のステップへ
+      ask_for_new_name_and_execute(selected_file, opts)
     end,
   })
 end
