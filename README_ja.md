@@ -10,8 +10,9 @@
 </table>
 
 `UCM.nvim` は、Unreal Engine のC++クラス管理（作成、ファイル切り替え、リネーム、削除）を、Neovimから行うためのプラグインです。
-[UBT.nvim](https://github.com/taku25/UBT.nvim) と一緒に使うことで作業効率が上がります
-[UEP.nvim](https://github.com/taku25/UEP.nvim) と一緒に使うことで作業効率が上がります
+
+その他、Unreal Engine開発を強化するためのプラグイン群 ([`UEP.nvim`](https://github.com/taku25/UEP.nvim), [`UCM.nvim`](https://github.com/taku25/UCM.nvim)) 
+ ([`ULG.nvim`](https://github.com/taku25/ULG.nvim), [`neo-tree-unl.nvim`](https://github.com/taku25/neo-tree-unl.nvim)) があります。
 
 [English](./README.md) | [日本語](./README_ja.md)
 
