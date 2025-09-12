@@ -132,12 +132,18 @@ end
 -------------------------------------------------
 
 local function ask_for_destination_and_execute(source_file, original_opts)
+  -- ★★★ ここからが修正箇所 ★★★
+  -- 1. 移動元のファイルパスから、プロジェクトではなく「モジュール」のルートを特定する
+  local unl_finder = require("UNL.finder")
+  local module_root = unl_finder.module.find_module_root(source_file)
+  -- ★★★ 修正箇所ここまで ★★★
+  --
   -- find_picker を使って移動先のディレクトリを選択させる
   unl_find_picker.pick({
     title = "  Select Destination for '" .. vim.fn.fnamemodify(source_file, ":t:r") .. "'",
     conf = get_config(),
     logger_name = "UCM",
-    exec_cmd = cmd_core.get_fd_directory_cmd(),
+    exec_cmd = cmd_core.get_fd_directory_cmd(module_root),
     preview_enabled = false,
     on_submit = function(selected_dir)
       if not selected_dir then

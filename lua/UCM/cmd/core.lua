@@ -84,18 +84,29 @@ function M.resolve_class_pair(file_path)
 
   return result
 end
-function M.get_fd_directory_cmd()
+-- @param base_path string|nil 検索を開始する起点ディレクトリ。nilならcwd。
+function M.get_fd_directory_cmd(base_path)
   local full_path_regex = ".*[\\\\/](Source|Plugins)[\\\\/].*"
   local excludes = { "Intermediate", "Binaries", "Saved" }
 
-  local fd_cmd = {
-    "fd",
-    "--regex", full_path_regex,
-    "--full-path",
-    "--type", "d",
-    "--path-separator", "/",
-    -- "--absolute-path",
-  } 
+  local fd_cmd = { "fd" }
+  
+  -- ★★★ ここからが修正箇所 ★★★
+  -- base_path が指定されていれば、それをfdの検索パス引数として追加する
+  if base_path and base_path ~= "" then
+    table.insert(fd_cmd, ".") -- パターンとしてカレントを指定
+    table.insert(fd_cmd, base_path) -- 検索ベースパスを指定
+  end
+  -- ★★★ 修正箇所ここまで ★★★
+  
+  table.insert(fd_cmd, "--regex")
+  table.insert(fd_cmd, full_path_regex)
+  table.insert(fd_cmd, "--full-path")
+  table.insert(fd_cmd, "--type")
+  table.insert(fd_cmd, "d")
+  table.insert(fd_cmd, "--path-separator")
+  table.insert(fd_cmd, "/")
+  
   for _, dir in ipairs(excludes) do
     table.insert(fd_cmd, "--exclude")
     table.insert(fd_cmd, dir)
