@@ -6,13 +6,9 @@ local logger = require("UCM.logger")
 local M = {}
 
 function M.run(opts)
+  opts = opts or {} 
+  opts.current_file_path = opts.current_file_path or vim.api.nvim_buf_get_name(0)
 
-  if not opts or not opts.current_file_path then
-    opts = {
-      current_file_path = vim.api.nvim_buf_get_name(0)
-    }
-  end
-    
   -- Step 1: Resolve the class file pair from the current buffer path
   local class_info, err = cmd_core.resolve_class_pair(opts.current_file_path)
   if not class_info then
