@@ -121,7 +121,7 @@ local function execute_file_creation(plan)
     CLASS_PREFIX = new_class_prefix,
     BASE_CLASS_NAME = plan.opts.parent_class,
     UCLASS_SPECIFIER = (plan.template_def and plan.template_def.uclass_specifier) or "",
-    DIRECT_INCLUDES = (plan.template_def and plan.template_def.priority > 10 and plan.template_def.direct_includes and #plan.template_def.direct_includes > 0)
+    DIRECT_INCLUDES = (plan.template_def and plan.template_def.direct_includes and #plan.template_def.direct_includes > 0)
         and ("#include " .. table.concat(plan.template_def.direct_includes, "\n#include "))
       or ('#include "' .. plan.opts.parent_class .. '.h"'),
   }
