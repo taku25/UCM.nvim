@@ -185,7 +185,6 @@ function M.run(opts)
       target_dir = opts.target_dir or vim.loop.cwd(),
       on_complete = opts.on_complete,
     }
-
     local plan, err = prepare_creation_plan(final_opts, conf)
     if err then
       if final_opts.on_complete then
@@ -193,7 +192,6 @@ function M.run(opts)
       end
       return log.get().error(err)
     end
-
     if not conf.confirm_on_new then
         execute_file_creation(plan)
     else
@@ -233,7 +231,20 @@ function M.run(opts)
     local unl_api_ok, unl_api = pcall(require, "UNL.api")
     if unl_api_ok then
       log.get().info("Fetching project classes from UEP.nvim provider...")
-      local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", { logger_name = "UCM" })
+
+      -- ▼▼▼ ここからが修正箇所 ▼▼▼
+      -- 1. UEPプロバイダーを呼び出す前に、現在のプロジェクトルートを特定する
+      local project_root = require("UNL.finder").project.find_project_root(base_dir)
+      if not project_root then
+          log.get().warn("Could not find project root from '%s'. Cannot fetch dynamic classes.", base_dir)
+      end
+      
+      -- 2. UEPプロバイダーに、どのプロジェクトのクラス情報が必要かを明示的に伝える
+      local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", { 
+        project_root = project_root, -- この情報を追加
+        logger_name = "UCM" 
+      })
+      -- ▲▲▲ ここまでが修正箇所 ▲▲▲
 
       if req_ok and header_details and next(header_details) then
         log.get().info("Successfully fetched %d header details.", vim.tbl_count(header_details))
@@ -306,22 +317,17 @@ function M.run(opts)
       if not user_input or user_input == "" then
         return log.get().info("Class creation canceled.")
       end
-
       local sanitized_input = user_input:gsub("\\", "/")
       local class_name = vim.fn.fnamemodify(sanitized_input, ":t")
       local subdir_path = vim.fn.fnamemodify(sanitized_input, ":h")
-
       collected_opts.class_name = class_name
-
       if subdir_path == "." or subdir_path == "" then
         collected_opts.target_dir = base_dir
       else
         collected_opts.target_dir = vim.fs.joinpath(base_dir, subdir_path)
       end
-
       log.get().debug("Validating target directory: %s", collected_opts.target_dir)
       local context, err = cmd_core.resolve_creation_context(collected_opts.target_dir)
-
       if not context then
         log.get().error(err)
         if collected_opts.on_complete and type(collected_opts.on_complete) == "function" then
@@ -337,6 +343,5 @@ function M.run(opts)
 
   ask_for_class_name_and_path()
 end
-
 
 return M
