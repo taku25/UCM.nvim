@@ -11,7 +11,7 @@
 </table>
 
 `UCM.nvim` is a plugin for managing your Unreal Engine C++ classes (creation, file switching, renaming, deletion) from within Neovim.
-Check out other plugins to enhance Unreal Engine development: ([`UEP.nvim`](https://github.com/taku25/UEP.nvim), [`UBT.nvim`](https://github.com/taku25/UBT.nvim), [`ULG.nvim`](https://github.com/taku25/ULG.nvim), [`neo-tree-unl.nvim`](https://github.com/taku25/neo-tree-unl.nvim)).
+Check out other plugins to enhance Unreal Engine development: ([`UEP.nvim`](https://github.com/taku25/UEP.nvim), [`UBT.nvim`](https://github.com/taku25/UBT.nvim), [`ULG.nvim`](https://github.com/taku25/ULG.nvim), [`neo-tree-unl.nvim`](https://github.com/taku25/neo-tree-unl.nvim),[tree-sitter-unreal-cpp](https://github.com/taku25/tree-sitter-unreal-cpp))
 
 [English](./README.md) | [日本語 (Japanese)](./README_ja.md)
 
