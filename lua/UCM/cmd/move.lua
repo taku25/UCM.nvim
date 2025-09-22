@@ -44,7 +44,6 @@ end
 -------------------------------------------------
 -- Main Execution Flow (Core Logic)
 -------------------------------------------------
-
 local function execute_file_move(opts)
   local on_complete_callback = opts.on_complete
 
@@ -93,38 +92,44 @@ local function execute_file_move(opts)
     table.insert(prompt_lines, op.old .. " -> " .. op.new)
   end
 
-  vim.ui.select({ "Yes, move files", "No, cancel" }, { prompt = table.concat(prompt_lines, "\n") }, function(choice)
-    if choice ~= "Yes, move files" then return log.get().info("Move canceled.") end
+  -- ▼▼▼ 変更箇所 ▼▼▼
+  local prompt_str = table.concat(prompt_lines, "\n")
+  local choices = "&Yes, move files\n&No, cancel"
+  local decision = vim.fn.confirm(prompt_str, choices)
 
-    local all_moved_successfully = true
-    for _, op in ipairs(operations) do
-      local rename_ok, rename_err = pcall(vim.loop.fs_rename, op.old, op.new)
-      if not rename_ok then
-        log.get().error("File move failed for %s: %s", op.old, tostring(rename_err))
-        all_moved_successfully = false
-        break
-      end
+  if decision ~= 1 then
+    return log.get().info("Move canceled.")
+  end
+  -- ▲▲▲ 変更ここまで ▲▲▲
+
+  local all_moved_successfully = true
+  for _, op in ipairs(operations) do
+    local rename_ok, rename_err = pcall(vim.loop.fs_rename, op.old, op.new)
+    if not rename_ok then
+      log.get().error("File move failed for %s: %s", op.old, tostring(rename_err))
+      all_moved_successfully = false
+      break
     end
+  end
 
-    local result_payload = {
-      status = all_moved_successfully and "success" or "failed",
-      operations = operations,
-      module = module,
-    }
-    unl_events.publish(unl_event_types.ON_AFTER_MOVE_CLASS_FILE, result_payload)
+  local result_payload = {
+    status = all_moved_successfully and "success" or "failed",
+    operations = operations,
+    module = module,
+  }
+  unl_events.publish(unl_event_types.ON_AFTER_MOVE_CLASS_FILE, result_payload)
 
-    if on_complete_callback and type(on_complete_callback) == "function" then
-      vim.schedule(function()
-        on_complete_callback(all_moved_successfully, result_payload)
-      end)
-    end
+  if on_complete_callback and type(on_complete_callback) == "function" then
+    vim.schedule(function()
+      on_complete_callback(all_moved_successfully, result_payload)
+    end)
+  end
 
-    if all_moved_successfully then
-      log.get().info("Move complete. IMPORTANT: You may need to update #include paths and regenerate project files.")
-    else
-      log.get().error("An error occurred during the move operation. Some files may not have been moved.")
-    end
-  end)
+  if all_moved_successfully then
+    log.get().info("Move complete. IMPORTANT: You may need to update #include paths and regenerate project files.")
+  else
+    log.get().error("An error occurred during the move operation. Some files may not have been moved.")
+  end
 end
 
 -------------------------------------------------

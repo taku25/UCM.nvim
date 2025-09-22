@@ -55,9 +55,7 @@ local function execute_file_deletion(file_path, opts)
     return publish_and_return_error(err)
   end
 
-
   local module = unl_finder.module.find_module(file_path)
-
   local files_to_delete = {}
   if class_info.h then table.insert(files_to_delete, class_info.h) end
   if class_info.cpp then table.insert(files_to_delete, class_info.cpp) end
@@ -78,46 +76,49 @@ local function execute_file_deletion(file_path, opts)
     return publish_and_return_error(perm_err)
   end
 
+  -- ▼▼▼ 変更箇所 ▼▼▼
   local prompt_str = string.format("Permanently delete class '%s'?\n\n%s", class_info.class_name, table.concat(files_to_delete, "\n"))
-  local yes_choice = "Yes, delete files"
-  vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt_str }, function(choice)
-    if choice ~= yes_choice then
-      return log.get().info("Deletion canceled.")
-    end
+  local choices = "&Yes, delete files\n&No, cancel"
+  local decision = vim.fn.confirm(prompt_str, choices)
 
-    local all_deleted_successfully = true
-    for _, path in ipairs(files_to_delete) do
-      local ok, unlink_err = pcall(vim.loop.fs_unlink, path)
-      if ok then
-        local bufnr = vim.fn.bufnr(path)
-        if bufnr > 0 then vim.cmd("bdelete! " .. bufnr) end
-      else
-        log.get().error("Failed to delete file %s: %s", path, tostring(unlink_err))
-        all_deleted_successfully = false
-      end
-    end
+  if decision ~= 1 then
+    return log.get().info("Deletion canceled.")
+  end
+  -- ▲▲▲ 変更ここまで ▲▲▲
 
-    local result_payload = {
-      status = all_deleted_successfully and "success" or "failed",
-      source_file = class_info.cpp,
-      header_file = class_info.h,
-      module = module
-    }
-
-    unl_events.publish(unl_event_types.ON_AFTER_DELETE_CLASS_FILE, result_payload)
-
-    if on_complete_callback and type(on_complete_callback) == "function" then
-      vim.schedule(function()
-        on_complete_callback(all_deleted_successfully, result_payload)
-      end)
-    end
-
-    if all_deleted_successfully then
-      log.get().info("Successfully deleted class '%s'", class_info.class_name)
+  -- Yesが選択された後の処理はそのまま続ける
+  local all_deleted_successfully = true
+  for _, path in ipairs(files_to_delete) do
+    local ok, unlink_err = pcall(vim.loop.fs_unlink, path)
+    if ok then
+      local bufnr = vim.fn.bufnr(path)
+      if bufnr > 0 then vim.cmd("bdelete! " .. bufnr) end
     else
-      log.get().error("Failed to delete one or more files for class '%s'. Please check the log.", class_info.class_name)
+      log.get().error("Failed to delete file %s: %s", path, tostring(unlink_err))
+      all_deleted_successfully = false
     end
-  end)
+  end
+
+  local result_payload = {
+    status = all_deleted_successfully and "success" or "failed",
+    source_file = class_info.cpp,
+    header_file = class_info.h,
+    module = module
+  }
+
+  unl_events.publish(unl_event_types.ON_AFTER_DELETE_CLASS_FILE, result_payload)
+
+  if on_complete_callback and type(on_complete_callback) == "function" then
+    vim.schedule(function()
+      on_complete_callback(all_deleted_successfully, result_payload)
+    end)
+  end
+
+  if all_deleted_successfully then
+    log.get().info("Successfully deleted class '%s'", class_info.class_name)
+  else
+    log.get().error("Failed to delete one or more files for class '%s'. Please check the log.", class_info.class_name)
+  end
 end
 
 -------------------------------------------------

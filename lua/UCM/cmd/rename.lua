@@ -95,48 +95,54 @@ local function execute_file_rename(opts)
 
   local prompt_lines = { string.format("Rename '%s' to '%s'?", old_class_name, new_class_name), "" }
   for _, op in ipairs(operations) do table.insert(prompt_lines, op.old .. " -> " .. op.new) end
-  
-  vim.ui.select({ "Yes, apply rename", "No, cancel" }, { prompt = table.concat(prompt_lines, "\n") }, function(choice)
-    if choice ~= "Yes, apply rename" then return log.get().info("Rename canceled by user.") end
 
-    local renamed_files = {}
-    local rename_failed = false
-    for _, op in ipairs(operations) do
-      local ok, rename_err = pcall(vim.loop.fs_rename, op.old, op.new)
-      if ok then
-        table.insert(renamed_files, { old = op.old, new = op.new })
-      else
-        log.get().error("File rename failed for %s: %s", op.old, tostring(rename_err))
-        rename_failed = true
-        break
-      end
-    end
-    if rename_failed then
-      for _, rf in ipairs(renamed_files) do pcall(vim.loop.fs_rename, rf.new, rf.old) end
-      return publish_and_return_error("File rename operation failed. Rolling back changes.")
-    end
+  -- ▼▼▼ 変更箇所 ▼▼▼
+  local prompt_str = table.concat(prompt_lines, "\n")
+  local choices = "&Yes, apply rename\n&No, cancel"
+  local decision = vim.fn.confirm(prompt_str, choices)
 
-    local content_replace_failed = false
-    if content_replace_failed then
-      for _, op in ipairs(operations) do pcall(vim.loop.fs_rename, op.new, op.old) end
-      return publish_and_return_error("Content replacement failed. Rolling back changes.")
-    end
-    
-    local success_payload = {
-      status = "success",
-      old_class_name = old_class_name,
-      new_class_name = new_class_name,
-      module = module,
-    }
-    unl_events.publish(unl_event_types.ON_AFTER_RENAME_CLASS_FILE, success_payload)
+  if decision ~= 1 then
+    return log.get().info("Rename canceled by user.")
+  end
+  -- ▲▲▲ 変更ここまで ▲▲▲
 
-    if on_complete_callback and type(on_complete_callback) == "function" then
-      vim.schedule(function()
-        on_complete_callback(true, success_payload)
-      end)
+  local renamed_files = {}
+  local rename_failed = false
+  for _, op in ipairs(operations) do
+    local ok, rename_err = pcall(vim.loop.fs_rename, op.old, op.new)
+    if ok then
+      table.insert(renamed_files, { old = op.old, new = op.new })
+    else
+      log.get().error("File rename failed for %s: %s", op.old, tostring(rename_err))
+      rename_failed = true
+      break
     end
-    log.get().info("Rename complete. IMPORTANT: Please regenerate your project files.")
-  end)
+  end
+  if rename_failed then
+    for _, rf in ipairs(renamed_files) do pcall(vim.loop.fs_rename, rf.new, rf.old) end
+    return publish_and_return_error("File rename operation failed. Rolling back changes.")
+  end
+
+  local content_replace_failed = false
+  if content_replace_failed then
+    for _, op in ipairs(operations) do pcall(vim.loop.fs_rename, op.new, op.old) end
+    return publish_and_return_error("Content replacement failed. Rolling back changes.")
+  end
+
+  local success_payload = {
+    status = "success",
+    old_class_name = old_class_name,
+    new_class_name = new_class_name,
+    module = module,
+  }
+  unl_events.publish(unl_event_types.ON_AFTER_RENAME_CLASS_FILE, success_payload)
+
+  if on_complete_callback and type(on_complete_callback) == "function" then
+    vim.schedule(function()
+      on_complete_callback(true, success_payload)
+    end)
+  end
+  log.get().info("Rename complete. IMPORTANT: Please regenerate your project files.")
 end
 
 -------------------------------------------------

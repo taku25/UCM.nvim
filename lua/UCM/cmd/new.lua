@@ -158,7 +158,6 @@ local function execute_file_creation(plan)
 
   log.get().info("Successfully created class: " .. plan.opts.class_name)
 
-  -- ▼▼▼ ここからが今回の修正箇所 ▼▼▼
   local open_setting = plan.conf.auto_open_on_new
   if open_setting == "header" then
     open_util.safe({ file_path = plan.header_path, open_cmd = "edit", plugin_name = "UCM" })
@@ -168,11 +167,9 @@ local function execute_file_creation(plan)
     open_util.safe({ file_path = plan.header_path, open_cmd = "edit", plugin_name = "UCM" })
     open_util.safe({ file_path = plan.source_path, open_cmd = "vsplit", plugin_name = "UCM" })
   end
-  -- ▲▲▲ ここまでが今回の修正箇所 ▲▲▲
 end
 
 
--- ... (これより下の M.run 関数は変更なし) ...
 function M.run(opts)
   opts = opts or {}
   local conf = get_config()
@@ -193,18 +190,20 @@ function M.run(opts)
       return log.get().error(err)
     end
     if not conf.confirm_on_new then
-        execute_file_creation(plan)
+      execute_file_creation(plan)
     else
+      -- ▼▼▼ 変更箇所1 ▼▼▼
       local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
         plan.opts.class_name, plan.header_path, plan.source_path)
-      local yes_choice = "Yes, create files"
-      vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt }, function(choice)
-        if choice == yes_choice then
-          execute_file_creation(plan)
-        else
-          log.get().info("Class creation canceled.")
-        end
-      end)
+      local choices = "&Yes, create files\n&No, cancel"
+      local decision = vim.fn.confirm(prompt, choices)
+
+      if decision == 1 then
+        execute_file_creation(plan)
+      else
+        log.get().info("Class creation canceled.")
+      end
+      -- ▲▲▲ 変更ここまで ▲▲▲
     end
     return
   end
@@ -231,21 +230,14 @@ function M.run(opts)
     local unl_api_ok, unl_api = pcall(require, "UNL.api")
     if unl_api_ok then
       log.get().info("Fetching project classes from UEP.nvim provider...")
-
-      -- ▼▼▼ ここからが修正箇所 ▼▼▼
-      -- 1. UEPプロバイダーを呼び出す前に、現在のプロジェクトルートを特定する
       local project_root = require("UNL.finder").project.find_project_root(base_dir)
       if not project_root then
-          log.get().warn("Could not find project root from '%s'. Cannot fetch dynamic classes.", base_dir)
+        log.get().warn("Could not find project root from '%s'. Cannot fetch dynamic classes.", base_dir)
       end
-      
-      -- 2. UEPプロバイダーに、どのプロジェクトのクラス情報が必要かを明示的に伝える
-      local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", { 
-        project_root = project_root, -- この情報を追加
-        logger_name = "UCM" 
+      local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", {
+        project_root = project_root,
+        logger_name = "UCM"
       })
-      -- ▲▲▲ ここまでが修正箇所 ▲▲▲
-
       if req_ok and header_details and next(header_details) then
         log.get().info("Successfully fetched %d header details.", vim.tbl_count(header_details))
         for file_path, details in pairs(header_details) do
@@ -285,7 +277,7 @@ function M.run(opts)
       on_submit = function(selected)
         if not selected then return log.get().info("Class creation canceled.") end
         collected_opts.parent_class = selected
-        
+
         local plan, err = prepare_creation_plan(collected_opts, conf)
         if err then
           if collected_opts.on_complete then
@@ -293,20 +285,22 @@ function M.run(opts)
           end
           return log.get().error(err)
         end
-        
+
         if not conf.confirm_on_new then
           execute_file_creation(plan)
         else
+          -- ▼▼▼ 変更箇所2 ▼▼▼
           local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
             plan.opts.class_name, plan.header_path, plan.source_path)
-          local yes_choice = "Yes, create files"
-          vim.ui.select({ yes_choice, "No, cancel" }, { prompt = prompt }, function(choice)
-            if choice == yes_choice then
-              execute_file_creation(plan)
-            else
-              log.get().info("Class creation canceled.")
-            end
-          end)
+          local choices = "&Yes, create files\n&No, cancel"
+          local decision = vim.fn.confirm(prompt, choices)
+
+          if decision == 1 then
+            execute_file_creation(plan)
+          else
+            log.get().info("Class creation canceled.")
+          end
+          -- ▲▲▲ 変更ここまで ▲▲▲
         end
       end,
     })
