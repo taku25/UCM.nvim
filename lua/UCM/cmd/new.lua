@@ -1,4 +1,4 @@
--- lua/UCM/cmd/new.lua
+-- lua/UCM/cmd/new.lua (すべての修正を反映した完全版)
 
 local unl_picker = require("UNL.backend.picker")
 local selectors = require("UCM.selector")
@@ -8,15 +8,49 @@ local log = require("UCM.logger")
 local fs = require("vim.fs")
 local unl_events = require("UNL.event.events")
 local unl_event_types = require("UNL.event.types")
--- (変更) 正しいモジュールを読み込む
 local open_util = require("UNL.buf.open")
 
--- ... (これより上の部分は変更なし) ...
 local function get_config()
   return require("UNL.config").get("UCM")
 end
 
 local M = {}
+
+---
+-- 絶対パスをUnreal Engineの#includeで使える、より標準的な相対パスに変換する
+-- @param absolute_path string
+-- @return string|nil
+local function get_relative_include_path(absolute_path)
+    if not absolute_path then return nil end
+
+    -- パス区切り文字をスラッシュに統一して扱いやすくする
+    local normalized_path = absolute_path:gsub("\\", "/")
+
+    -- パターン1: 標準的な Public/Private フォルダからの相対パスを試す
+    -- 例: .../Source/MyModule/Public/Character/MyChar.h -> "Character/MyChar.h"
+    --     .../Plugins/MyPlugin/Source/MyModule/Private/Comp/MyComp.h -> "Comp/MyComp.h"
+    local match = normalized_path:match("/Source/[^/]+/[Pp]ublic/(.+)")
+               or normalized_path:match("/Source/[^/]+/[Pp]rivate/(.+)")
+               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]ublic/(.+)")
+               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]rivate/(.+)")
+
+    if match then
+        return match
+    end
+
+    -- パターン2: パターン1に一致しない場合、モジュールルートからの相対パスを試す
+    -- 例: .../Source/MyModule/Test/Character/MyChar.h -> "Test/Character/MyChar.h"
+    match = normalized_path:match("/Source/[^/]+/(.+)")
+         or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/(.+)")
+
+    if match then
+        return match
+    end
+
+    -- どのパターンにも一致しなかった場合
+    return nil
+end
+
 
 local function process_template(template_path, replacements)
   if vim.fn.filereadable(template_path) ~= 1 then
@@ -115,15 +149,28 @@ local function execute_file_creation(plan)
     or (plan.opts.parent_class:match("^[AUFIS]"))
     or "U"
 
+  local direct_includes_str = ""
+  if plan.template_def and plan.template_def.direct_includes and #plan.template_def.direct_includes > 0 then
+    direct_includes_str = "#include " .. table.concat(plan.template_def.direct_includes, "\n#include ")
+  else
+    local relative_path = get_relative_include_path(plan.opts.parent_class_header)
+    if relative_path then
+      direct_includes_str = '#include "' .. relative_path .. '"'
+    else
+      direct_includes_str = '#include "' .. plan.opts.parent_class .. '.h"'
+    end
+  end
+
+  local new_header_include_path = get_relative_include_path(plan.header_path) or (plan.opts.class_name .. ".h")
+
   local replacements = {
     CLASS_NAME = plan.opts.class_name,
     API_MACRO = plan.context.module.name:upper() .. "_API",
     CLASS_PREFIX = new_class_prefix,
     BASE_CLASS_NAME = plan.opts.parent_class,
     UCLASS_SPECIFIER = (plan.template_def and plan.template_def.uclass_specifier) or "",
-    DIRECT_INCLUDES = (plan.template_def and plan.template_def.direct_includes and #plan.template_def.direct_includes > 0)
-        and ("#include " .. table.concat(plan.template_def.direct_includes, "\n#include "))
-      or ('#include "' .. plan.opts.parent_class .. '.h"'),
+    DIRECT_INCLUDES = direct_includes_str,
+    HEADER_INCLUDE_PATH = new_header_include_path,
   }
 
   local header_content, h_err = process_template(header_template_path, vim.tbl_extend('keep', { COPYRIGHT_HEADER = plan.conf.copyright_header_h }, replacements))
@@ -181,6 +228,7 @@ function M.run(opts)
       parent_class = opts.parent_class,
       target_dir = opts.target_dir or vim.loop.cwd(),
       on_complete = opts.on_complete,
+      parent_class_header = opts.parent_class_header,
     }
     local plan, err = prepare_creation_plan(final_opts, conf)
     if err then
@@ -192,7 +240,6 @@ function M.run(opts)
     if not conf.confirm_on_new then
       execute_file_creation(plan)
     else
-      -- ▼▼▼ 変更箇所1 ▼▼▼
       local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
         plan.opts.class_name, plan.header_path, plan.source_path)
       local choices = "&Yes, create files\n&No, cancel"
@@ -203,7 +250,6 @@ function M.run(opts)
       else
         log.get().info("Class creation canceled.")
       end
-      -- ▲▲▲ 変更ここまで ▲▲▲
     end
     return
   end
@@ -213,6 +259,7 @@ function M.run(opts)
   local collected_opts = { on_complete = opts.on_complete }
 
   local function ask_for_parent_class()
+    local class_data_map = {}
     local static_choices = {}
     local seen_classes = {}
     for _, rule in ipairs(conf.template_rules) do
@@ -252,6 +299,9 @@ function M.run(opts)
                     vim.fn.fnamemodify(file_path, ":t"))
                 })
                 seen_classes[class_info.class_name] = true
+                class_data_map[class_info.class_name] = {
+                  header_file = file_path,
+                }
               end
             end
           end
@@ -278,6 +328,11 @@ function M.run(opts)
         if not selected then return log.get().info("Class creation canceled.") end
         collected_opts.parent_class = selected
 
+        local parent_data = class_data_map[selected]
+        if parent_data then
+            collected_opts.parent_class_header = parent_data.header_file
+        end
+
         local plan, err = prepare_creation_plan(collected_opts, conf)
         if err then
           if collected_opts.on_complete then
@@ -289,7 +344,6 @@ function M.run(opts)
         if not conf.confirm_on_new then
           execute_file_creation(plan)
         else
-          -- ▼▼▼ 変更箇所2 ▼▼▼
           local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
             plan.opts.class_name, plan.header_path, plan.source_path)
           local choices = "&Yes, create files\n&No, cancel"
@@ -300,7 +354,6 @@ function M.run(opts)
           else
             log.get().info("Class creation canceled.")
           end
-          -- ▲▲▲ 変更ここまで ▲▲▲
         end
       end,
     })

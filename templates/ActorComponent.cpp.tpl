@@ -1,6 +1,6 @@
 {{COPYRIGHT_HEADER}}
 
-#include "{{CLASS_NAME}}.h"
+#include "{{HEADER_INCLUDE_PATH}}"
 
 // Sets default values for this component's properties
 {{CLASS_PREFIX}}{{CLASS_NAME}}::{{CLASS_PREFIX}}{{CLASS_NAME}}()

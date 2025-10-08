@@ -1,6 +1,6 @@
 {{COPYRIGHT_HEADER}}
 
-#include "{{CLASS_NAME}}.h"
+#include "{{HEADER_INCLUDE_PATH}}"
 #include "SlateOptMacros.h"
 
 BEGIN_SLATE_FUNCTION_BUILD_OPTIMIZATION

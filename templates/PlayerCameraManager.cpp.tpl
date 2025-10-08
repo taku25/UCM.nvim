@@ -1,7 +1,7 @@
 
 {{COPYRIGHT_HEADER}}
 
-#include "{{CLASS_NAME}}.h"
+#include "{{HEADER_INCLUDE_PATH}}"
 
 {{CLASS_PREFIX}}{{CLASS_NAME}}::{{CLASS_PREFIX}}{{CLASS_NAME}}()
 {
