@@ -1,4 +1,4 @@
-*UCM.jax* For UCM.nvim                          vim: ft=help
+*UCM.txt* For UCM.nvim                          vim: ft=help
 
 ==============================================================================
 CONTENTS                                                 *UCM-contents*
