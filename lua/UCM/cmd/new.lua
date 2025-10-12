@@ -267,7 +267,9 @@ function M.run(opts)
       if name and not seen_classes[name] then
         table.insert(static_choices, {
           value = name,
-          label = string.format("%-40s (%s)", name, "   Engine Template")
+          label = string.format("%-40s (%s)", name, "   Engine Template"),
+          -- こちらはファイルパスがないので filename は設定しない
+          filename = "" -- ここには filename キーがある
         })
         seen_classes[name] = true
       end
@@ -291,13 +293,18 @@ function M.run(opts)
           if details.classes then
             for _, class_info in ipairs(details.classes) do
               if not seen_classes[class_info.class_name] and not class_info.is_final and not class_info.is_interface then
+                
+                --- ▼▼▼ 修正点 1/2: ここに `filename` キーを追加します ▼▼▼
                 table.insert(dynamic_choices, {
                   value = class_info.class_name,
                   label = string.format("%-40s (%s)   %s",
                     class_info.class_name,
                     class_info.base_class or "UObject",
-                    vim.fn.fnamemodify(file_path, ":t"))
+                    vim.fn.fnamemodify(file_path, ":t")),
+                  filename = file_path, -- この行を追加！
                 })
+                --- ▲▲▲ 修正ここまで ▲▲▲
+
                 seen_classes[class_info.class_name] = true
                 class_data_map[class_info.class_name] = {
                   header_file = file_path,
@@ -323,7 +330,11 @@ function M.run(opts)
       items = all_choices,
       conf = conf,
       logger_name = "UCM",
-      preview_enabled = false,
+
+      --- ▼▼▼ 修正点 2/2: プレビューを有効にします ▼▼▼
+      preview_enabled = true, -- false から true に変更！
+      --- ▲▲▲ 修正ここまで ▲▲▲
+
       on_submit = function(selected)
         if not selected then return log.get().info("Class creation canceled.") end
         collected_opts.parent_class = selected
