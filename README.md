@@ -11,7 +11,6 @@
 </table>
 
 `UCM.nvim` is a plugin for managing your Unreal Engine C++ classes (creation, file switching, renaming, deletion) from within Neovim.
-Check out other plugins to enhance Unreal Engine development: ([`UEP.nvim`](https://github.com/taku25/UEP.nvim), [`UBT.nvim`](https://github.com/taku25/UBT.nvim), [`ULG.nvim`](https://github.com/taku25/ULG.nvim), [`neo-tree-unl.nvim`](https://github.com/taku25/neo-tree-unl.nvim),[tree-sitter-unreal-cpp](https://github.com/taku25/tree-sitter-unreal-cpp))
 
 [English](./README.md) | [日本語 (Japanese)](./README_ja.md)
 
@@ -179,6 +178,25 @@ opts = {
 },
 ```
 
+## Others
+
+**Unreal Engine Related Plugins:**
+
+* **[UEP](https://github.com/taku25/UEP.nvim)**
+    * Analyzes `uproject` files for easy file navigation.
+* **[UBT](https://github.com/taku25/UBT.nvim)**
+    * Asynchronously run Build, GenerateClangDataBase, and other tasks from Neovim.
+* **[UCM](https://github.com/taku25/UCM.nvim)**
+    * Add and delete classes directly from Neovim.
+* **[ULG](https://github.com/taku25/ULG.nvim)**
+    * View UE logs, live coding status, stat fps, and more within nvim.
+* **[USH](https://github.com/taku25/USH.nvim)**
+    * Interact with `ushell` from nvim.
+* **[neo-tree-unl](https://github.com/taku25/neo-tree-unl.nvim)**
+    * Display an IDE-like project explorer.
+* **[tree-sitter for Unreal Engine](https://github.com/taku25/tree-sitter-unreal-cpp)**
+    * Provides tree-sitter highlighting, including support for `UCLASS` and other Unreal Engine specific syntax.
+    
 ## 📜 License
 
 MIT License
