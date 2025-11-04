@@ -1,11 +1,19 @@
--- lua/UCM/selector/template.lua (priorityを考慮した再帰探索版)
+-- From: C:\Users\taku3\Documents\git\UCM.nvim\lua\UCM\selector\template.lua
 
-local logger = require("UCM.logger")
+local log = require("UCM.logger")
 local unl_api -- 遅延require用の変数
 
 local M = {}
 
-local function get_parent_class_name(class_name)
+-- ▼▼▼ 修正点 1: get_parent_class_name がキャッシュ(class_data_map)を引数で受け取るようにする ▼▼▼
+local function get_parent_class_name(class_name, class_data_map)
+  -- 1. キャッシュから親クラス名を返す (高速パス)
+  if class_data_map and class_data_map[class_name] and class_data_map[class_name].base_class then
+    log.get().debug("Found parent class '%s' in cache for '%s'", class_data_map[class_name].base_class, class_name)
+    return class_data_map[class_name].base_class
+  end
+  -- ▲▲▲
+
   -- (この関数は変更なし)
   if unl_api == nil then
     local ok
@@ -13,7 +21,12 @@ local function get_parent_class_name(class_name)
     if not ok then unl_api = false end
   end
   if not unl_api then return nil end
+
+  -- ▼▼▼ 修正点 2: キャッシュがなかった場合のみ、APIを呼び出す (低速パス) ▼▼▼
+  log.get().warn("Cache miss for '%s'. Falling back to slow API call (uep.get_project_classes) to find parent.", class_name)
   local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", { logger_name = "UCM"})
+  -- ▲▲▲
+  
   if not (req_ok and header_details) then return nil end
   for _, details in pairs(header_details) do
     if details.classes then
@@ -27,14 +40,14 @@ local function get_parent_class_name(class_name)
   return nil
 end
 
--- ★★★ このヘルパー関数を、新しいロジックに書き換えます ★★★
-local function select_recursive(class_name, conf, depth)
+-- ▼▼▼ 修正点 3: select_recursive が class_data_map をリレーする ▼▼▼
+local function select_recursive(class_name, conf, depth, class_data_map)
   depth = depth or 0
   if not class_name or depth > 10 then 
     return nil
   end
 
-  -- Step 1: まず、現在のクラス名で最適なルールを探す
+  -- ( ... Step 1: 最適なルールを探すロジックは変更なし ... )
   local all_templates = conf.template_rules
   local best_match_for_current_level = nil
   local highest_priority = -1
@@ -47,44 +60,41 @@ local function select_recursive(class_name, conf, depth)
     end
   end
   
-  -- Step 2: 見つかったルールのpriorityを評価する
-  -- priorityが十分に高い（> 10など）か、そもそもルールが見つからなかった場合は再帰しない
   if not best_match_for_current_level or best_match_for_current_level.priority >= 10 then
     if best_match_for_current_level then
-      logger.get().info("Found a specific template ('%s') for '%s'. Using this.", best_match_for_current_level.name, class_name)
+      log.get().info("Found a specific template ('%s') for '%s'. Using this.", best_match_for_current_level.name, class_name)
     end
-    -- 最適なルールが見つかった（またはこれ以上探せない）ので、それを返す
     return best_match_for_current_level
   end
 
-  -- Step 3: priorityが低い（< 10）フォールバックルールにマッチした場合、親を辿って探索を続行
-  logger.get().info("Matched a generic rule ('%s') for '%s'. Looking for a better match in its parent hierarchy...", best_match_for_current_level.name, class_name)
-  local parent_class = get_parent_class_name(class_name)
+  log.get().info("Matched a generic rule ('%s') for '%s'. Looking for a better match in its parent hierarchy...", best_match_for_current_level.name, class_name)
+  
+  -- [!] class_data_map を get_parent_class_name に渡す
+  local parent_class = get_parent_class_name(class_name, class_data_map)
   
   if parent_class then
-    -- 親クラスで再帰的に探索し、もし"より良い"ルールが見つかればそちらを優先する
-    local match_from_parent = select_recursive(parent_class, conf, depth + 1)
+    -- [!] class_data_map を再帰呼び出しに渡す
+    local match_from_parent = select_recursive(parent_class, conf, depth + 1, class_data_map)
     if match_from_parent then
       return match_from_parent
     end
   end
 
-  -- 親を辿っても良いルールが見つからなかった場合は、
-  -- 最初にマッチした低優先度のルールを最終結果として返す
-  logger.get().info("No better match found in parent hierarchy. Using the generic rule '%s'.", best_match_for_current_level.name)
+  log.get().info("No better match found in parent hierarchy. Using the generic rule '%s'.", best_match_for_current_level.name)
   return best_match_for_current_level
 end
 
 
-function M.select(parent_class, conf)
-  -- (公開APIは変更なし、内部ロジックを呼び出すだけ)
-  local result = select_recursive(parent_class, conf)
+-- ▼▼▼ 修正点 4: 公開API 'select' が class_data_map を受け取るようにする ▼▼▼
+function M.select(parent_class, conf, class_data_map)
+  -- [!] class_data_map を select_recursive に渡す
+  local result = select_recursive(parent_class, conf, 0, class_data_map)
   
   if result then
     return result
   else
-    -- どのルールにも（最低優先度のルールすら）マッチしない最悪のケース
-    logger.get().warn("Template selection completely failed for '%s'. Falling back to first 'Object' template.", parent_class)
+    -- ( ... フォールバックロジックは変更なし ... )
+    log.get().warn("Template selection completely failed for '%s'. Falling back to first 'Object' template.", parent_class)
     for _, rule in ipairs(conf.template_rules) do
       if rule.name == "Object" then
         return rule
@@ -94,6 +104,6 @@ function M.select(parent_class, conf)
   
   return nil
 end
-
+-- ▲▲▲
 
 return M

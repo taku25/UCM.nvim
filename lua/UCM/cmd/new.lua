@@ -101,7 +101,8 @@ local function prepare_creation_plan(opts, conf)
   local context, err = cmd_core.resolve_creation_context(opts.target_dir)
   if not context then return nil, err end
 
-  local template_def = selectors.template.select(opts.parent_class, conf)
+  -- [!] opts.class_data_map を selectors.template.select に渡す
+  local template_def = selectors.template.select(opts.parent_class, conf, opts.class_data_map)
   if not template_def then return nil, "No suitable template found for: " .. opts.parent_class end
 
   local template_base_path = path.get_template_base_path(template_def, "UCM")
@@ -294,7 +295,6 @@ function M.run(opts)
             for _, class_info in ipairs(details.classes) do
               if not seen_classes[class_info.class_name] and not class_info.is_final and not class_info.is_interface then
                 
-                --- ▼▼▼ 修正点 1/2: ここに `filename` キーを追加します ▼▼▼
                 table.insert(dynamic_choices, {
                   value = class_info.class_name,
                   label = string.format("%-40s (%s)   %s",
@@ -303,11 +303,11 @@ function M.run(opts)
                     vim.fn.fnamemodify(file_path, ":t")),
                   filename = file_path, -- この行を追加！
                 })
-                --- ▲▲▲ 修正ここまで ▲▲▲
 
                 seen_classes[class_info.class_name] = true
                 class_data_map[class_info.class_name] = {
                   header_file = file_path,
+                  base_class = class_info.base_class
                 }
               end
             end
@@ -343,6 +343,8 @@ function M.run(opts)
         if parent_data then
             collected_opts.parent_class_header = parent_data.header_file
         end
+
+        collected_opts.class_data_map = class_data_map
 
         local plan, err = prepare_creation_plan(collected_opts, conf)
         if err then
