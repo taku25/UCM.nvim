@@ -20,36 +20,6 @@ local M = {}
 -- 絶対パスをUnreal Engineの#includeで使える、より標準的な相対パスに変換する
 -- @param absolute_path string
 -- @return string|nil
-local function get_relative_include_path(absolute_path)
-    if not absolute_path then return nil end
-
-    -- パス区切り文字をスラッシュに統一して扱いやすくする
-    local normalized_path = absolute_path:gsub("\\", "/")
-
-    -- パターン1: 標準的な Public/Private フォルダからの相対パスを試す
-    -- 例: .../Source/MyModule/Public/Character/MyChar.h -> "Character/MyChar.h"
-    --     .../Plugins/MyPlugin/Source/MyModule/Private/Comp/MyComp.h -> "Comp/MyComp.h"
-    local match = normalized_path:match("/Source/[^/]+/[Pp]ublic/(.+)")
-               or normalized_path:match("/Source/[^/]+/[Pp]rivate/(.+)")
-               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]ublic/(.+)")
-               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]rivate/(.+)")
-
-    if match then
-        return match
-    end
-
-    -- パターン2: パターン1に一致しない場合、モジュールルートからの相対パスを試す
-    -- 例: .../Source/MyModule/Test/Character/MyChar.h -> "Test/Character/MyChar.h"
-    match = normalized_path:match("/Source/[^/]+/(.+)")
-         or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/(.+)")
-
-    if match then
-        return match
-    end
-
-    -- どのパターンにも一致しなかった場合
-    return nil
-end
 
 
 local function process_template(template_path, replacements)
@@ -154,7 +124,7 @@ local function execute_file_creation(plan)
   if plan.template_def and plan.template_def.direct_includes and #plan.template_def.direct_includes > 0 then
     direct_includes_str = "#include " .. table.concat(plan.template_def.direct_includes, "\n#include ")
   else
-    local relative_path = get_relative_include_path(plan.opts.parent_class_header)
+    local relative_path = cmd_core.get_relative_include_path(plan.opts.parent_class_header)
     if relative_path then
       direct_includes_str = '#include "' .. relative_path .. '"'
     else
@@ -162,7 +132,7 @@ local function execute_file_creation(plan)
     end
   end
 
-  local new_header_include_path = get_relative_include_path(plan.header_path) or (plan.opts.class_name .. ".h")
+  local new_header_include_path = cmd_core.get_relative_include_path(plan.header_path) or (plan.opts.class_name .. ".h")
 
   local replacements = {
     CLASS_NAME = plan.opts.class_name,

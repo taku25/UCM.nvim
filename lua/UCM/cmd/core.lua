@@ -141,5 +141,35 @@ function M.get_fd_files_cmd()
   return fd_cmd
 end
 
+function M.get_relative_include_path(absolute_path)
+    if not absolute_path then return nil end
+
+    -- パス区切り文字をスラッシュに統一して扱いやすくする
+    local normalized_path = absolute_path:gsub("\\", "/")
+
+    -- パターン1: 標準的な Public/Private フォルダからの相対パスを試す
+    -- 例: .../Source/MyModule/Public/Character/MyChar.h -> "Character/MyChar.h"
+    --     .../Plugins/MyPlugin/Source/MyModule/Private/Comp/MyComp.h -> "Comp/MyComp.h"
+    local match = normalized_path:match("/Source/[^/]+/[Pp]ublic/(.+)")
+               or normalized_path:match("/Source/[^/]+/[Pp]rivate/(.+)")
+               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]ublic/(.+)")
+               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]rivate/(.+)")
+
+    if match then
+        return match
+    end
+
+    -- パターン2: パターン1に一致しない場合、モジュールルートからの相対パスを試す
+    -- 例: .../Source/MyModule/Test/Character/MyChar.h -> "Test/Character/MyChar.h"
+    match = normalized_path:match("/Source/[^/]+/(.+)")
+         or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/(.+)")
+
+    if match then
+        return match
+    end
+
+    -- どのパターンにも一致しなかった場合
+    return nil
+end
 
 return M

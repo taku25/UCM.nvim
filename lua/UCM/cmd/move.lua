@@ -41,6 +41,70 @@ local function validate_move_operation(operations)
   return true, nil
 end
 
+---
+-- 移動された .cpp の中身を読み取り、.h への #include を修正する
+-- @param operations table ( {old="...", new="..."} のリスト)
+-- @param class_info table (cmd_core.resolve_class_pair の戻り値)
+-- @return boolean, string|nil 成功/失敗、エラーメッセージ
+local function replace_includes_for_move(operations, class_info)
+  local log_instance = log.get()
+  local new_header_path, new_source_path, old_header_path = nil, nil, nil
+  
+  for _, op in ipairs(operations) do
+    if op.new:match("%.h$") then new_header_path = op.new end
+    if op.new:match("%.cpp$") then new_source_path = op.new end
+  end
+  
+  old_header_path = class_info.h -- 元のヘッダーパス
+
+  -- .cpp と .h の両方が移動対象だった場合のみ実行
+  if not (new_source_path and new_header_path and old_header_path) then
+    log_instance.debug("Header or source file missing from move op, skipping include fix.")
+    return true -- エラーではない
+  end
+
+  -- 1. 古いインクルードパスを計算
+  local old_relative_include = cmd_core.get_relative_include_path(old_header_path)
+  if not old_relative_include then
+    log_instance.warn("Could not determine OLD relative include path for %s. Skipping .cpp update.", old_header_path)
+    return true -- エラーではない
+  end
+  
+  -- 2. 新しいインクルードパスを計算
+  local new_relative_include = cmd_core.get_relative_include_path(new_header_path)
+  if not new_relative_include then
+    log_instance.warn("Could not determine NEW relative include path for %s. Skipping .cpp update.", new_header_path)
+    return true -- エラーではない
+  end
+
+  if old_relative_include == new_relative_include then
+    log_instance.debug("Include paths are identical, no replacement needed.")
+    return true
+  end
+
+  -- 3. .cpp ファイルの中身を置換
+  local read_ok, s_lines = pcall(vim.fn.readfile, new_source_path)
+  if not read_ok then return false, "Failed to read new source file: " .. new_source_path end
+  
+  local content = table.concat(s_lines, "\n")
+  
+  -- [!] 古いインクルードパスをピンポイントで置換
+  local old_include_line = '#include "' .. old_relative_include .. '"'
+  local new_include_line = '#include "' .. new_relative_include .. '"'
+  
+  local new_content, count = content:gsub(old_include_line, new_include_line, 1) -- 1回だけ置換
+  
+  if count > 0 then
+    log_instance.debug("Fixing .h include in: %s", new_source_path)
+    local write_ok, write_err = pcall(vim.fn.writefile, vim.split(new_content, '\n'), new_source_path)
+    if not write_ok then return false, "Failed to write updated source content: " .. tostring(write_err) end
+  else
+    log_instance.warn("Could not find old include line (%s) in %s. File may need manual update.", old_include_line, new_source_path)
+  end
+  
+  return true, nil
+end
+
 -------------------------------------------------
 -- Main Execution Flow (Core Logic)
 -------------------------------------------------
@@ -110,6 +174,27 @@ local function execute_file_move(opts)
       all_moved_successfully = false
       break
     end
+  end
+
+
+  if all_moved_successfully then
+    -- ファイル移動成功！ 次に #include を修正する
+    log.get().debug("Files moved. Now attempting to fix #includes...")
+    local fix_ok, fix_err = replace_includes_for_move(operations, class_info)
+    
+    if not fix_ok then
+      -- #include の修正に失敗した場合
+      log.get().error("Failed to fix #includes: %s. Rolling back file move.", tostring(fix_err))
+      -- ロールバック
+      for _, op in ipairs(operations) do pcall(vim.loop.fs_rename, op.new, op.old) end
+      return publish_and_return_error("Content replacement failed. Rolling back changes.")
+    end
+  else
+    -- ファイル移動自体に失敗した場合
+    log.get().error("An error occurred during the move operation. Some files may not have been moved.")
+    -- ロールバック (rename_failed のロジックと重複するが、念のため)
+    for _, op in ipairs(operations) do if vim.fn.filereadable(op.new) == 1 then pcall(vim.loop.fs_rename, op.new, op.old) end end
+    return publish_and_return_error("File move operation failed. Rolling back changes.")
   end
 
   local result_payload = {

@@ -53,6 +53,73 @@ local function validate_rename_operation(operations)
   return true, nil
 end
 
+
+---
+-- リネームされた .h と .cpp の中身を読み取り、#include を修正する
+-- @param operations table ( {old="...", new="..."} のリスト)
+-- @param old_name string ("MyClass")
+-- @param new_name string ("MyNewClass")
+-- @return boolean, string|nil 成功/失敗、エラーメッセージ
+local function replace_includes_for_rename(operations, old_name, new_name)
+  local log_instance = log.get()
+  local new_header_path, new_source_path = nil, nil
+  
+  for _, op in ipairs(operations) do
+    if op.new:match("%.h$") then new_header_path = op.new end
+    if op.new:match("%.cpp$") then new_source_path = op.new end
+  end
+
+  -- 1. ヘッダーファイル (.h) の .generated.h を修正
+  if new_header_path then
+    local read_ok, h_lines = pcall(vim.fn.readfile, new_header_path)
+    if not read_ok then return false, "Failed to read new header file: " .. new_header_path end
+    
+    local content = table.concat(h_lines, "\n")
+    local old_gen_h = '"' .. old_name .. '.generated.h"'
+    local new_gen_h = '"' .. new_name .. '.generated.h"'
+    
+    -- gsub は置換回数も返す
+    local new_content, count = content:gsub(old_gen_h, new_gen_h)
+    
+    if count > 0 then
+      log_instance.debug("Fixing .generated.h include in: %s", new_header_path)
+      local write_ok, write_err = pcall(vim.fn.writefile, vim.split(new_content, '\n'), new_header_path)
+      if not write_ok then return false, "Failed to write updated header content: " .. tostring(write_err) end
+    end
+  end
+
+  -- 2. ソースファイル (.cpp) の .h を修正
+  if new_source_path then
+    -- [!] cmd_core から新しい相対パスを取得
+    local new_relative_include = cmd_core.get_relative_include_path(new_header_path)
+    if not new_relative_include then
+      log_instance.warn("Could not determine relative include path for %s. Skipping .cpp update.", new_header_path)
+      return true -- これはエラーではない
+    end
+    
+    local new_include_line = '#include "' .. new_relative_include .. '"'
+    
+    local read_ok, s_lines = pcall(vim.fn.readfile, new_source_path)
+    if not read_ok then return false, "Failed to read new source file: " .. new_source_path end
+    
+    local content = table.concat(s_lines, "\n")
+    
+    -- [!] 古いインクルード行を正規表現で検索 (パスが不明なため)
+    -- 例: #include "MyClass.h" または #include "ModuleA/MyClass.h"
+    local old_include_pattern = '#include%s*"[^"]*' .. old_name .. '%.h"'
+    
+    local new_content, count = content:gsub(old_include_pattern, new_include_line)
+    
+    if count > 0 then
+      log_instance.debug("Fixing .h include in: %s", new_source_path)
+      local write_ok, write_err = pcall(vim.fn.writefile, vim.split(new_content, '\n'), new_source_path)
+      if not write_ok then return false, "Failed to write updated source content: " .. tostring(write_err) end
+    end
+  end
+  
+  return true, nil
+end
+
 -------------------------------------------------
 -- Main Execution Flow (Core Logic)
 -------------------------------------------------
@@ -123,8 +190,14 @@ local function execute_file_rename(opts)
     return publish_and_return_error("File rename operation failed. Rolling back changes.")
   end
 
-  local content_replace_failed = false
-  if content_replace_failed then
+  -- ファイルリネーム成功！ 次に #include を修正する
+  log.get().debug("Files renamed. Now attempting to fix #includes...")
+  local fix_ok, fix_err = replace_includes_for_rename(operations, old_class_name, new_class_name)
+  
+  if not fix_ok then
+    -- #include の修正に失敗した場合 (致命的ではないが警告は出す)
+    log.get().error("Failed to fix #includes: %s. Rolling back file rename.", tostring(fix_err))
+    -- ロールバック
     for _, op in ipairs(operations) do pcall(vim.loop.fs_rename, op.new, op.old) end
     return publish_and_return_error("Content replacement failed. Rolling back changes.")
   end
