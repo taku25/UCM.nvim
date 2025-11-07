@@ -18,7 +18,7 @@ CONTENTS                                                 *UCM-contents*
 ==============================================================================
 1. Introduction                                     *UCM-introduction*
 
-*UCM.nvim* is a plugin for comfortably managing Unreal Engine C++ classes
+UCM.nvim is a plugin for comfortably managing Unreal Engine C++ classes
 (creating, switching files, renaming, deleting) from within Neovim.
 
 Main Features:
@@ -173,7 +173,7 @@ The following are all configurable options with their default values.
 ==============================================================================
 4. Lua API                                                     *UCM-api*
 
-Depending on the arguments provided, *UCM.nvim* will automatically launch a UI
+Depending on the arguments provided, UCM.nvim will automatically launch a UI
 picker.
 
 ------------------------------------------------------------------------------
