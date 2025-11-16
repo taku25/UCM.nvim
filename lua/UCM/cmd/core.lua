@@ -32,7 +32,9 @@ function M.resolve_creation_context(target_dir)
 
   --- ★★★ ここからが修正箇所 ★★★
   -- ".Build.cs" または ".build.cs" を空文字列に置換して、モジュール名だけを抽出する
-  local module_name = build_cs_path:gsub("%.[Bb]uild%.cs$", "")
+  -- local module_name = build_cs_path:gsub("%.[Bb]uild%.cs$", "")
+  local module_name = vim.fn.fnamemodify(build_cs_path, ":r:r")
+  -- print(module_name)
   --- ★★★ 修正箇所ここまで ★★★
 
   local module_info = {
