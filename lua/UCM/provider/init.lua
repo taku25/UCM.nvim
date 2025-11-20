@@ -27,12 +27,14 @@ function M.setup()
       capability = "ucm.class.move",
       impl = require("UCM.provider.move"),
     },
-    -- ▼▼▼ ここから追加 ▼▼▼
     {
       capability = "ucm.class.rename",
       impl = require("UCM.provider.rename"),
     },
-    -- ▲▲▲ ここまで追加 ▲▲▲
+    {
+      capability = "ucm.get_class_pair",
+      impl = require("UCM.provider.class_pair"),
+    },
   }
 
   -- ループで一括登録
