@@ -52,6 +52,38 @@ function M.resolve_creation_context(target_dir)
 end
 
 ---
+---
+---
+-- fdコマンドを使用してモジュール内からファイルを検索するフォールバック関数
+-- @param root_dir string 検索起点（モジュールルート）
+-- @param filename string 探したいファイル名 (例: "MyActor.cpp")
+-- @return string|nil 見つかったファイルの絶対パス、またはnil
+local function find_file_fallback(root_dir, filename)
+  -- fdコマンドの構築
+  -- -F: 固定文字列検索 (正規表現無効化)
+  -- -t f: ファイルのみ
+  -- --max-results 1: 1つ見つかったら即終了 (高速化)
+  local cmd = {
+    "fd",
+    "--fixed-strings",
+    "--type", "f",
+    "--max-results", "1",
+    filename,
+    root_dir
+  }
+
+  -- 同期実行
+  local output = vim.fn.system(cmd)
+
+  -- 成功時 (終了コード0 かつ 出力が空でない)
+  if vim.v.shell_error == 0 and output ~= "" then
+    return vim.trim(output) -- 末尾の改行を除去
+  end
+
+  return nil
+end
+
+---
 -- 'switch', 'delete', 'rename'のために、既存のクラスペアを解決する
 -- @param file_path string
 -- @return table|nil, string
@@ -62,23 +94,57 @@ function M.resolve_class_pair(file_path)
     return nil, "Input file does not exist: " .. absolute_file
   end
 
-  -- resolve_creation_contextは既にリファクタリング済みなので、そのまま利用できる
   local context, err = M.resolve_creation_context(fs.dirname(absolute_file))
   if not context then
     return nil, err
   end
 
   local class_name = vim.fn.fnamemodify(absolute_file, ":t:r")
+  local is_header_input = absolute_file:match("%.h$") and true or false
+
+  -- 1. まずは「ルール通り」の標準的な場所を予測する
+  local expected_h = fs.normalize(fs.joinpath(context.header_dir, class_name .. ".h"))
+  local expected_cpp = fs.normalize(fs.joinpath(context.source_dir, class_name .. ".cpp"))
+
   local result = {
-    h = fs.normalize(fs.joinpath(context.header_dir, class_name .. ".h")),
-    cpp = fs.normalize(fs.joinpath(context.source_dir, class_name .. ".cpp")),
+    h = expected_h,
+    cpp = expected_cpp,
     class_name = class_name,
-    is_header_input = absolute_file:match("%.h$") and true or false,
+    is_header_input = is_header_input,
     module = context.module,
   }
 
-  if vim.fn.filereadable(result.h) ~= 1 then result.h = nil end
-  if vim.fn.filereadable(result.cpp) ~= 1 then result.cpp = nil end
+  -- 2. 予測した場所にファイルがない場合、fdコマンドでモジュール内検索 (救済処置)
+
+  -- ヘッダーの実在確認とフォールバック検索
+  if vim.fn.filereadable(result.h) ~= 1 then
+    if is_header_input then
+      result.h = absolute_file
+    else
+      -- fd で検索 (高速)
+      local fallback_h = find_file_fallback(context.module.root, class_name .. ".h")
+      if fallback_h then
+        result.h = fallback_h
+      else
+        result.h = nil
+      end
+    end
+  end
+
+  -- ソースの実在確認とフォールバック検索
+  if vim.fn.filereadable(result.cpp) ~= 1 then
+    if not is_header_input then
+      result.cpp = absolute_file
+    else
+      -- fd で検索 (高速)
+      local fallback_cpp = find_file_fallback(context.module.root, class_name .. ".cpp")
+      if fallback_cpp then
+        result.cpp = fallback_cpp
+      else
+        result.cpp = nil
+      end
+    end
+  end
 
   if not result.h and not result.cpp then
     return nil, "Could not resolve any existing class files for: " .. class_name
