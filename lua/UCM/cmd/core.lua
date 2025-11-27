@@ -1,6 +1,6 @@
--- lua/UCM/cmd/core.lua (UNLベースにリファクタリング)
+-- lua/UCM/cmd/core.lua
 
-local unl_finder = require("UNL.finder") -- ★ 変更点: UNLのファインダーを利用
+local unl_finder = require("UNL.finder")
 local selectors = require("UCM.selector")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
@@ -30,57 +30,25 @@ function M.resolve_creation_context(target_dir)
     return nil, "Found module root, but failed to find .build.cs file inside."
   end
 
-  --- ★★★ ここからが修正箇所 ★★★
-  -- ".Build.cs" または ".build.cs" を空文字列に置換して、モジュール名だけを抽出する
-  -- local module_name = build_cs_path:gsub("%.[Bb]uild%.cs$", "")
   local module_name = vim.fn.fnamemodify(build_cs_path, ":r:r")
-  -- print(module_name)
-  --- ★★★ 修正箇所ここまで ★★★
 
   local module_info = {
     root = module_root,
     name = module_name,
   }
 
-  local header_dir, source_dir = selectors.folder.resolve_locations(absolute_dir)
+  -- ★変更: リストを受け取る
+  local header_dirs, source_dirs = selectors.folder.resolve_locations(absolute_dir)
 
   return {
     module = module_info,
-    header_dir = header_dir,
-    source_dir = source_dir,
+    -- 新規作成用には、リストの先頭（最も優先度の高いルール）を採用する
+    header_dir = header_dirs[1],
+    source_dir = source_dirs[1],
+    -- 検索用に全候補も保持しておく
+    header_dirs = header_dirs,
+    source_dirs = source_dirs,
   }
-end
-
----
----
----
--- fdコマンドを使用してモジュール内からファイルを検索するフォールバック関数
--- @param root_dir string 検索起点（モジュールルート）
--- @param filename string 探したいファイル名 (例: "MyActor.cpp")
--- @return string|nil 見つかったファイルの絶対パス、またはnil
-local function find_file_fallback(root_dir, filename)
-  -- fdコマンドの構築
-  -- -F: 固定文字列検索 (正規表現無効化)
-  -- -t f: ファイルのみ
-  -- --max-results 1: 1つ見つかったら即終了 (高速化)
-  local cmd = {
-    "fd",
-    "--fixed-strings",
-    "--type", "f",
-    "--max-results", "1",
-    filename,
-    root_dir
-  }
-
-  -- 同期実行
-  local output = vim.fn.system(cmd)
-
-  -- 成功時 (終了コード0 かつ 出力が空でない)
-  if vim.v.shell_error == 0 and output ~= "" then
-    return vim.trim(output) -- 末尾の改行を除去
-  end
-
-  return nil
 end
 
 ---
@@ -102,70 +70,58 @@ function M.resolve_class_pair(file_path)
   local class_name = vim.fn.fnamemodify(absolute_file, ":t:r")
   local is_header_input = absolute_file:match("%.h$") and true or false
 
-  -- 1. まずは「ルール通り」の標準的な場所を予測する
-  local expected_h = fs.normalize(fs.joinpath(context.header_dir, class_name .. ".h"))
-  local expected_cpp = fs.normalize(fs.joinpath(context.source_dir, class_name .. ".cpp"))
+  local found_h = nil
+  local found_cpp = nil
 
-  local result = {
-    h = expected_h,
-    cpp = expected_cpp,
+  -- ★変更: ヘッダーファイルの探索 (候補リスト順)
+  if is_header_input then
+      found_h = absolute_file
+  else
+      for _, dir in ipairs(context.header_dirs) do
+          local p = fs.normalize(fs.joinpath(dir, class_name .. ".h"))
+          if vim.fn.filereadable(p) == 1 then
+              found_h = p
+              break -- 見つかったら終了
+          end
+      end
+  end
+
+  -- ★変更: ソースファイルの探索 (候補リスト順)
+  if not is_header_input then
+      found_cpp = absolute_file
+  else
+      for _, dir in ipairs(context.source_dirs) do
+          local p = fs.normalize(fs.joinpath(dir, class_name .. ".cpp"))
+          if vim.fn.filereadable(p) == 1 then
+              found_cpp = p
+              break -- 見つかったら終了
+          end
+      end
+  end
+
+  if not found_h and not found_cpp then
+    return nil, "Could not resolve any existing class files for: " .. class_name
+  end
+
+  return {
+    h = found_h,
+    cpp = found_cpp,
     class_name = class_name,
     is_header_input = is_header_input,
     module = context.module,
   }
-
-  -- 2. 予測した場所にファイルがない場合、fdコマンドでモジュール内検索 (救済処置)
-
-  -- ヘッダーの実在確認とフォールバック検索
-  if vim.fn.filereadable(result.h) ~= 1 then
-    if is_header_input then
-      result.h = absolute_file
-    else
-      -- fd で検索 (高速)
-      local fallback_h = find_file_fallback(context.module.root, class_name .. ".h")
-      if fallback_h then
-        result.h = fallback_h
-      else
-        result.h = nil
-      end
-    end
-  end
-
-  -- ソースの実在確認とフォールバック検索
-  if vim.fn.filereadable(result.cpp) ~= 1 then
-    if not is_header_input then
-      result.cpp = absolute_file
-    else
-      -- fd で検索 (高速)
-      local fallback_cpp = find_file_fallback(context.module.root, class_name .. ".cpp")
-      if fallback_cpp then
-        result.cpp = fallback_cpp
-      else
-        result.cpp = nil
-      end
-    end
-  end
-
-  if not result.h and not result.cpp then
-    return nil, "Could not resolve any existing class files for: " .. class_name
-  end
-
-  return result
 end
--- @param base_path string|nil 検索を開始する起点ディレクトリ。nilならcwd。
+
 function M.get_fd_directory_cmd(base_path)
   local full_path_regex = ".*[\\\\/](Source|Plugins)[\\\\/].*"
   local excludes = { "Intermediate", "Binaries", "Saved" }
 
   local fd_cmd = { "fd" }
   
-  -- ★★★ ここからが修正箇所 ★★★
-  -- base_path が指定されていれば、それをfdの検索パス引数として追加する
   if base_path and base_path ~= "" then
-    table.insert(fd_cmd, ".") -- パターンとしてカレントを指定
-    table.insert(fd_cmd, base_path) -- 検索ベースパスを指定
+    table.insert(fd_cmd, ".") 
+    table.insert(fd_cmd, base_path) 
   end
-  -- ★★★ 修正箇所ここまで ★★★
   
   table.insert(fd_cmd, "--regex")
   table.insert(fd_cmd, full_path_regex)
@@ -183,13 +139,7 @@ function M.get_fd_directory_cmd(base_path)
 end
 
 function M.get_fd_files_cmd()
-  local extensions = {
-    "cpp",
-    "h",
-    "hpp",
-    "inl",
-  }
-
+  local extensions = { "cpp", "h", "hpp", "inl" }
   local full_path_regex = ".*[\\\\/](Source|Plugins)[\\\\/].*\\.(" .. table.concat(extensions, "|") .. ")$"
   local excludes = { "Intermediate", "Binaries", "Saved" }
 
@@ -199,7 +149,6 @@ function M.get_fd_files_cmd()
     "--full-path",
     "--type", "f",
     "--path-separator", "/",
-    -- "--absolute-path",
   } 
 
   for _, dir in ipairs(excludes) do
@@ -211,32 +160,15 @@ end
 
 function M.get_relative_include_path(absolute_path)
     if not absolute_path then return nil end
-
-    -- パス区切り文字をスラッシュに統一して扱いやすくする
     local normalized_path = absolute_path:gsub("\\", "/")
-
-    -- パターン1: 標準的な Public/Private フォルダからの相対パスを試す
-    -- 例: .../Source/MyModule/Public/Character/MyChar.h -> "Character/MyChar.h"
-    --     .../Plugins/MyPlugin/Source/MyModule/Private/Comp/MyComp.h -> "Comp/MyComp.h"
     local match = normalized_path:match("/Source/[^/]+/[Pp]ublic/(.+)")
                or normalized_path:match("/Source/[^/]+/[Pp]rivate/(.+)")
                or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]ublic/(.+)")
                or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]rivate/(.+)")
-
-    if match then
-        return match
-    end
-
-    -- パターン2: パターン1に一致しない場合、モジュールルートからの相対パスを試す
-    -- 例: .../Source/MyModule/Test/Character/MyChar.h -> "Test/Character/MyChar.h"
+    if match then return match end
     match = normalized_path:match("/Source/[^/]+/(.+)")
          or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/(.+)")
-
-    if match then
-        return match
-    end
-
-    -- どのパターンにも一致しなかった場合
+    if match then return match end
     return nil
 end
 

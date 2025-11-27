@@ -303,10 +303,18 @@ local M = {
     { type = "source",  regex = "^[Pp]rivate$", replacement = "Public" },
     { type = "header",  regex = "^[Cc]lasses$", replacement = "Sources" },
     { type = "source",  regex = "^[Ss]ources$", replacement = "Classes" },
+
+    { type = "header",  regex = "^[Cc]lasses$", replacement = "Private" },
+    { type = "source",  regex = "^[Pp]rivate$", replacement = "Classes" },
+
+    -- エンジン用特殊ルール
+    { type = "source", regex = "^[Pp]rivate$", replacement = "Classes/GameFramework" },
+    { type = "source", regex = "^[Pp]rivate$", replacement = "Classes/Components" },
+    { type = "source", regex = "^[Pp]rivate$", replacement = "Classes/Engine" },
+
+    -- 正しい設定 (修正適用後)
+    { type = "header", regex = "^GameFramework$", replacement = "../Private" },
     
-    -- Example of an asymmetric rule (as you pointed out)
-    -- { regex = "^Headers$", replacement = "Private" },
-    -- { regex = "^Private$", replacement = "Headers" },
   },
 }
 
