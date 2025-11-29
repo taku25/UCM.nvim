@@ -1,16 +1,14 @@
 -- lua/UCM/cmd/copy_include.lua
 
 local unl_picker = require("UNL.backend.picker")
-local unl_find_picker = require("UNL.backend.find_picker") -- ★追加
+local unl_find_picker = require("UNL.backend.find_picker")
 local unl_finder = require("UNL.finder")
 local unl_api = require("UNL.api")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
-local cmd_core = require("UCM.cmd.core") -- ★追加: fdコマンド生成のため
 
 local M = {}
 
--- (copy_to_clipboard, resolve_and_copy は変更なし)
 local function copy_to_clipboard(text)
   vim.fn.setreg('+', text)
   vim.fn.setreg('"', text)
@@ -43,31 +41,46 @@ local function resolve_and_copy(file_path)
   copy_to_clipboard(include_str)
 end
 
--- ★ ヘルパー: ヘッダーファイル検索用のfdコマンド
+-- ★修正: ヘッダーファイル(.h, .hpp, .inl)のみを検索するfdコマンドを生成
 local function get_header_search_cmd()
-    -- UCM.cmd.core.get_fd_files_cmd をベースにするが、ヘッダーのみに絞っても良い
-    -- ここではシンプルに core のコマンドを再利用（cppも出るが許容範囲）
-    return cmd_core.get_fd_files_cmd()
+  -- 検索対象の拡張子 (cppは含めない)
+  local extensions = { "h", "hpp", "inl" }
+  
+  -- パターン: .../Source/... または .../Plugins/... にあるヘッダーファイル
+  local full_path_regex = ".*[\\\\/](Source|Plugins)[\\\\/].*\\.(" .. table.concat(extensions, "|") .. ")$"
+  local excludes = { "Intermediate", "Binaries", "Saved" }
+
+  local fd_cmd = {
+    "fd",
+    "--regex", full_path_regex,
+    "--full-path",
+    "--type", "f",
+    "--path-separator", "/",
+  } 
+
+  for _, dir in ipairs(excludes) do
+    table.insert(fd_cmd, "--exclude")
+    table.insert(fd_cmd, dir)
+  end
+  
+  return fd_cmd
 end
 
 function M.run(opts)
   opts = opts or {}
   local logger = log.get()
 
-  -- 1. 直接ファイルパス指定
   if opts.file_path then
     resolve_and_copy(opts.file_path)
     return
   end
 
-  -- 2. Pickerモード (!)
   if opts.has_bang then
     logger.debug("Attempting to fetch class list from UEP...")
     
     local uep_available = false
     local header_details = nil
 
-    -- UNL経由でUEPに問い合わせ
     if unl_api.provider then
         local req_ok, res = unl_api.provider.request("uep.get_project_classes", { 
             scope = "Full", 
@@ -79,7 +92,6 @@ function M.run(opts)
         end
     end
 
-    -- A. UEPが利用可能な場合: リッチなクラスピッカーを表示
     if uep_available then
         local items = {}
         for file_path, details in pairs(header_details) do
@@ -109,14 +121,14 @@ function M.run(opts)
         return
     end
 
-    -- B. UEPがない場合: 単純なファイル検索ピッカーにフォールバック
-    logger.info("UEP not available. Falling back to simple file search.")
+    logger.info("UEP not available. Falling back to simple header file search.")
     
     unl_find_picker.pick({
         title = "Select Header File (Fallback Mode)",
         conf = require("UNL.config").get("UCM"),
         logger_name = "UCM",
         preview_enabled = true,
+        -- ★修正: ヘッダー専用のコマンドを使用
         exec_cmd = get_header_search_cmd(),
         on_submit = function(file_path)
             if file_path then resolve_and_copy(file_path) end
@@ -125,7 +137,6 @@ function M.run(opts)
     return
   end
 
-  -- 3. カレントバッファモード
   local current_file = vim.api.nvim_buf_get_name(0)
   if current_file and current_file ~= "" then
     resolve_and_copy(current_file)
