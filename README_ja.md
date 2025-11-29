@@ -25,6 +25,8 @@
 *   **UI**
     * ファイル作成、リネイム、削除コマンド使用時にUIのフロントエンドとして[Telescope](https://github.com/nvim-telescope/telescope.nvim)や[fzf-lua](https://github.com/ibhagwan/fzf-lua)が自動で判定され使用されます
       明示的に指定することも可能です。どちらもインストールされていない場合はneovimネイティブが使用されます
+* **スマートなインクルード**:
+    * 現在のファイル、またはピッカーで選択したクラスの正しい `#include` パス（モジュールの `Public` や `Classes` フォルダからの相対パス）を自動計算し、クリップボードにコピーします。
 
 <table>
   <tr>
@@ -138,6 +140,8 @@ opts = {
 :UCM rename <Relative/Path/To/File> <NewName> " クラスファイルを直接リネーム (拡張子省略可)
 :UCM move <移動元のファイルパス> <移動先のディレクトリ> " クラスを新しいディレクトリに移動
 :UCM switch                                   " ヘッダー/ソースを切り替え
+:UCM copy_include                             " 現在のファイルの #include パスをコピー
+:UCM copy_include!                            " クラスを選択して #include パスをコピー
 ```
 
 ## 🤖 API & 自動化 (Automation Examples)

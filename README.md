@@ -25,6 +25,8 @@
   * **UI**:
       * For `new`, `rename`, and `delete` commands, UI frontends like [Telescope](https://github.com/nvim-telescope/telescope.nvim) or [fzf-lua](https://github.com/ibhagwan/fzf-lua) are automatically detected and used.
       * It's also possible to specify one explicitly. If neither is installed, the native Neovim UI is used as a fallback.
+  * **Smart Includes**:
+      * Calculates the correct relative `#include` path (from `Public`/`Classes` folders) for the current file or any selected class and copies it to the clipboard.
 
 <table>
   <tr>
@@ -138,6 +140,8 @@ If no arguments are provided, a UI will be launched.
 :UCM rename <Relative/Path/To/File> <NewName> " Directly rename a class file (extension is optional)
 :UCM move <Source/File/Path> <Target/Dir>    " Move a class to a new directory
 :UCM switch                                   " Switch between header/source
+:UCM copy_include                             " Copy #include path for current file to clipboard
+:UCM copy_include!                            " Pick a class and copy its #include path
 ```
 
 ## 🤖 API & Automation Examples
