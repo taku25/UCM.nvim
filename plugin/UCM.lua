@@ -65,5 +65,12 @@ builder.create({
       -- このコマンドは引数を取らない
       args = {},
     },
+
+    ["copy_include"] = {
+      handler = function(opts) ucm_api.copy_include(opts) end,
+      bang = true,
+      desc = "Copy #include path for current file or selected class (!).",
+      args = { { name = "file_path", required = false } },
+    },
   },
 })

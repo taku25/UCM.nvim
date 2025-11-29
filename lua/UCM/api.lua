@@ -5,6 +5,8 @@ local delete_cmd = require("UCM.cmd.delete")
 local rename_cmd = require("UCM.cmd.rename")
 local switch_cmd = require("UCM.cmd.switch")
 local move_cmd = require("UCM.cmd.move")
+local copy_include_cmd = require("UCM.cmd.copy_include")
+
 
 local M = {}
 
@@ -29,6 +31,10 @@ end
 -- `switch` はUIを使わないので同期のまま
 function M.switch_file(opts)
   return switch_cmd.run(opts)
+end
+
+function M.copy_include(opts)
+  copy_include_cmd.run(opts)
 end
 
 return M
