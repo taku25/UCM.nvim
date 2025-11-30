@@ -27,6 +27,9 @@
       * It's also possible to specify one explicitly. If neither is installed, the native Neovim UI is used as a fallback.
   * **Smart Includes**:
       * Calculates the correct relative `#include` path (from `Public`/`Classes` folders) for the current file or any selected class and copies it to the clipboard.
+  * **Macro Wizard**:
+      * Provides an intelligent completion wizard for Unreal Engine reflection macros (UPROPERTY, UFUNCTION, UCLASS, etc.).
+      * You can interactively select and insert multiple specifiers (e.g., EditAnywhere, BlueprintReadWrite) directly into your code.
 
 <table>
   <tr>
@@ -142,6 +145,8 @@ If no arguments are provided, a UI will be launched.
 :UCM switch                                   " Switch between header/source
 :UCM copy_include                             " Copy #include path for current file to clipboard
 :UCM copy_include!                            " Pick a class and copy its #include path
+:UCM specifiers                               " Insert specifiers for the current macro context (e.g. UPROPERTY)
+:UCM specifiers!                              " Force open macro type selector (UPROPERTY/UFUNCTION/etc)
 ```
 
 ## 🤖 API & Automation Examples

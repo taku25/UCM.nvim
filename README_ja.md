@@ -27,6 +27,9 @@
       明示的に指定することも可能です。どちらもインストールされていない場合はneovimネイティブが使用されます
 * **スマートなインクルード**:
     * 現在のファイル、またはピッカーで選択したクラスの正しい `#include` パス（モジュールの `Public` や `Classes` フォルダからの相対パス）を自動計算し、クリップボードにコピーします。
+* **マクロ入力支援 (Macro Wizard)**:
+    * Unreal Engineのリフレクションマクロ (UPROPERTY, UFUNCTION 等) のスペシファイア入力支援機能を提供します。
+    * コンテキストに応じて適切なスペシファイア（例: EditAnywhere, BlueprintReadWrite）をリストアップし、複数選択してコードに挿入できます。
 
 <table>
   <tr>
@@ -142,6 +145,8 @@ opts = {
 :UCM switch                                   " ヘッダー/ソースを切り替え
 :UCM copy_include                             " 現在のファイルの #include パスをコピー
 :UCM copy_include!                            " クラスを選択して #include パスをコピー
+:UCM specifiers                               " 現在の行のマクロ(UPROPERTY等)に対応するスペシファイアを挿入
+:UCM specifiers!                              " マクロの種類を強制的に選択してスペシファイアを挿入
 ```
 
 ## 🤖 API & 自動化 (Automation Examples)

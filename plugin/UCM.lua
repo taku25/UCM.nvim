@@ -72,5 +72,11 @@ builder.create({
       desc = "Copy #include path for current file or selected class (!).",
       args = { { name = "file_path", required = false } },
     },
+    ["specifiers"] = {
+      handler = function(opts) ucm_api.specifiers(opts) end,
+      bang = true, -- ! をつけるとマクロタイプを強制選択
+      desc = "Insert Macro Specifiers (UPROPERTY, UFUNCTION, etc). Use '!' to force select macro type.",
+      args = {},
+    },
   },
 })
