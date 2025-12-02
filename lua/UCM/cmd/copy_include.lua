@@ -1,11 +1,10 @@
--- lua/UCM/cmd/copy_include.lua
-
 local unl_picker = require("UNL.backend.picker")
 local unl_find_picker = require("UNL.backend.find_picker")
 local unl_finder = require("UNL.finder")
 local unl_api = require("UNL.api")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
+local cmd_core = require("UCM.cmd.core")
 
 local M = {}
 
@@ -17,36 +16,48 @@ local function copy_to_clipboard(text)
 end
 
 local function resolve_and_copy(file_path)
+  -- ★修正: .cppファイルの場合は、対になるヘッダーファイルを検索して対象を切り替える
+  if file_path:match("%.cpp$") then
+    local pair, _ = cmd_core.resolve_class_pair(file_path)
+    if pair and pair.h then
+      log.get().debug("Switched copy target from .cpp to .h: %s", pair.h)
+      file_path = pair.h
+    else
+      log.get().warn("Could not find paired header for .cpp file. Result might be incorrect.")
+    end
+  end
+
   local module_info = unl_finder.module.find_module(file_path)
   local relative_path = nil
   
   if module_info then
     local module_root = module_info.root
+    -- 検索順序。Privateフォルダ内のヘッダーも含めるため Private も検索対象
     local search_dirs = { "Public", "Classes", "Private" }
     
     for _, dir in ipairs(search_dirs) do
       local base = fs.joinpath(module_root, dir)
+      -- baseパスが含まれているか確認 (正規化パスでの比較が理想だが簡易判定)
       if file_path:find(base, 1, true) then
+         -- baseの長さ + パス区切り文字分(1) + 1 から末尾までを取得
          relative_path = file_path:sub(#base + 2)
          break
       end
     end
   end
 
+  -- モジュール構造から解決できなかった場合のフォールバック（ファイル名のみ）
   if not relative_path then
     relative_path = vim.fn.fnamemodify(file_path, ":t")
   end
 
+  -- #include 形式に整形
   local include_str = string.format('#include "%s"', relative_path)
   copy_to_clipboard(include_str)
 end
 
--- ★修正: ヘッダーファイル(.h, .hpp, .inl)のみを検索するfdコマンドを生成
 local function get_header_search_cmd()
-  -- 検索対象の拡張子 (cppは含めない)
   local extensions = { "h", "hpp", "inl" }
-  
-  -- パターン: .../Source/... または .../Plugins/... にあるヘッダーファイル
   local full_path_regex = ".*[\\\\/](Source|Plugins)[\\\\/].*\\.(" .. table.concat(extensions, "|") .. ")$"
   local excludes = { "Intermediate", "Binaries", "Saved" }
 
@@ -128,7 +139,6 @@ function M.run(opts)
         conf = require("UNL.config").get("UCM"),
         logger_name = "UCM",
         preview_enabled = true,
-        -- ★修正: ヘッダー専用のコマンドを使用
         exec_cmd = get_header_search_cmd(),
         on_submit = function(file_path)
             if file_path then resolve_and_copy(file_path) end
