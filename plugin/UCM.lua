@@ -78,5 +78,10 @@ builder.create({
       desc = "Insert Macro Specifiers (UPROPERTY, UFUNCTION, etc). Use '!' to force select macro type.",
       args = {},
     },
+    ["copy_imp"] = {
+      handler = function() ucm_api.copy_implementation() end,
+      desc = "UCM: Copy C++ implementation code for the current declaration.",
+      args = {},
+    },
   },
 })

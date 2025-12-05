@@ -7,6 +7,7 @@ local switch_cmd = require("UCM.cmd.switch")
 local move_cmd = require("UCM.cmd.move")
 local copy_include_cmd = require("UCM.cmd.copy_include")
 local specifiers_cmd = require("UCM.cmd.specifiers")
+local copy_imp_cmd = require("UCM.cmd.copy_imp")
 
 local M = {}
 
@@ -35,6 +36,9 @@ end
 
 function M.copy_include(opts)
   copy_include_cmd.run(opts)
+end
+function M.copy_implementation()
+  copy_imp_cmd.execute()
 end
 function M.specifiers(opts)
   specifiers_cmd.run(opts)
