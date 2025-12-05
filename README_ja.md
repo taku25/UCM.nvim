@@ -9,27 +9,29 @@
   </tr>
 </table>
 
-`UCM.nvim` は、Unreal Engine のC++クラス管理（作成、ファイル切り替え、リネーム、削除）を、Neovimから行うためのプラグインです。
+`UCM.nvim` は、Unreal Engine のC++クラス管理（作成、ファイル切り替え、リネーム、削除、実装コード生成）を、Neovimから行うためのプラグインです。プロジェクト固有のルールに従って動作します。
 
+[English](README.md) | [日本語 (Japanese)](README_ja.md)
 
-
-[English](./README.md) | [日本語](./README_ja.md)
-
----
+-----
 
 ## ✨ 機能 (Features)
-*   **データ駆動設計**:
-    * プロジェクト固有の複雑なフォルダ構造（`Public`/`Private`）や、多様なクラスのルールを`conf.lua`で一元管理しています
-    * クラス作成、リネイム、削除、ソースとヘッダーの切り変えをルールベースで判定実行します
-      **操作はファイルに関することです** 実際のクラスのリネイムなどはLSPなどを使って使ってください
-*   **UI**
-    * ファイル作成、リネイム、削除コマンド使用時にUIのフロントエンドとして[Telescope](https://github.com/nvim-telescope/telescope.nvim)や[fzf-lua](https://github.com/ibhagwan/fzf-lua)が自動で判定され使用されます
-      明示的に指定することも可能です。どちらもインストールされていない場合はneovimネイティブが使用されます
-* **スマートなインクルード**:
-    * 現在のファイル、またはピッカーで選択したクラスの正しい `#include` パス（モジュールの `Public` や `Classes` フォルダからの相対パス）を自動計算し、クリップボードにコピーします。
-* **マクロ入力支援 (Macro Wizard)**:
-    * Unreal Engineのリフレクションマクロ (UPROPERTY, UFUNCTION 等) のスペシファイア入力支援機能を提供します。
-    * コンテキストに応じて適切なスペシファイア（例: EditAnywhere, BlueprintReadWrite）をリストアップし、複数選択してコードに挿入できます。
+
+  * **データ駆動型アーキテクチャ**:
+      * プロジェクト固有の複雑なフォルダ構造（例：`Public`/`Private`の分離）やクラス作成ルールを `conf.lua` で一元管理します。
+      * クラスの作成、リネーム、削除、ヘッダー/ソースの切り替えは、これらの堅牢なルールに基づいて実行されます。
+      * **注意:** 全ての操作はファイルシステムベースです。コード内のクラスシンボルのリネームはLSPなどを使用して行ってください。
+  * **シームレスなUI統合**:
+      * `new`、`rename`、`delete` コマンドのフロントエンドとして、[Telescope](https://github.com/nvim-telescope/telescope.nvim) や [fzf-lua](https://github.com/ibhagwan/fzf-lua) を自動的に検出して使用します。
+      * 外部UIプラグインがインストールされていない場合は、NeovimネイティブのUIにフォールバックします。
+  * **インテリジェントな実装生成**:
+      * `:UCM copy_imp` コマンドは、カーソル下の関数宣言に対応するC++実装スタブを自動生成し、クリップボードにコピーします。
+      * `UFUNCTION` マクロ、`virtual`/`override` キーワード、デフォルト引数（`= 0.f`）を賢く除去し、適切な箇所にクラススコープや `Super::` 呼び出しを自動的に追加します。
+  * **スマートなインクルード**:
+      * 現在のファイル、またはピッカーで選択したクラスの正しい `#include` パス（モジュールの `Public` や `Classes` フォルダからの相対パス）を自動計算し、クリップボードにコピーします。
+  * **マクロ入力支援 (Macro Wizard)**:
+      * Unreal Engineのリフレクションマクロ (`UPROPERTY`, `UFUNCTION` など) のためのインテリジェントな補完ウィザードを提供します。
+      * 適切なスペシファイア（例: `EditAnywhere`, `BlueprintReadWrite`）を対話的に複数選択し、コードに直接挿入できます。
 
 <table>
   <tr>
@@ -50,30 +52,33 @@
 
 ## 🔧 必要要件 (Requirements)
 
-*   Neovim v0.11.3 以上
-*   **オプション (UI体験の向上のために、いずれかの導入を強く推奨):**
-    *   [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
-    *   [fzf-lua](https://github.com/ibhagwan/fzf-lua)
-    *   [fd](https://github.com/sharkdp/fd) (**`Telescope`や`fzf-lua`をUI使用時は必須**)
+  * Neovim v0.11.3 以上
+  * [**UNL.nvim**](https://github.com/taku25/UNL.nvim) (**必須**)
+  * **オプション (UI体験の向上のために、導入を強く推奨):**
+      * [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
+      * [fzf-lua](https://github.com/ibhagwan/fzf-lua)
+      * [fd](https://github.com/sharkdp/fd) (**`Telescope`や`fzf-lua`をUIとして使用する場合は必須**)
 
 ## 🚀 インストール (Installation)
 
-[lazy.nvim](https://github.com/folke/lazy.nvim)での設定例:
+お好みのプラグインマネージャーでインストールしてください。
+
+### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 return {
   'taku25/UCM.nvim',
   dependencies = {
-    "taku25/UNL.nvim", --!必須!
-    -- どちらか
-    "nvim-telescope/telescope.nvim",--オプション
-    "ibhagwan/fzf-lua",--オプション
+    "taku25/UNL.nvim", -- 必須!
+    -- どちらか一方 (オプション)
+    "nvim-telescope/telescope.nvim",
+    "ibhagwan/fzf-lua",
   },
   opts = {
-    -- あなたの好みに合わせて設定してください
+    -- 必要に応じて設定してください
   },
 }
-```
+````
 
 ## ⚙️ 設定 (Configuration)
 
@@ -91,20 +96,20 @@ opts = {
   -- :UCM new コマンド実行時に、ファイル作成の確認UIを表示するかどうか
   confirm_on_new = true,
 
-  -- 新規ファイル作成時のheader用コピーライト
+  -- 新規ヘッダーファイル作成時のコピーライト
   copyright_header_h = "// Copyright...",
-  -- 新規策維持のソース用コピーライト
+  -- 新規ソースファイル作成時のコピーライト
   copyright_header_cpp = "// Copyright..",
 
-  -- :CMD new時に親を選択しなかったときのデフォルト
-  default_parent_class = Actor,
+  -- :UCM new 時に親クラスを省略した場合のデフォルト
+  default_parent_class = "Actor",
 
-  -- クラス作成のテンプレート
+  -- クラス作成のテンプレートルール
   template_rules = {
     {
       name = "Object",
       priority = 0,
-      parent_regex = ".*", -- Default for any UObject
+      parent_regex = ".*", -- 全てのUObjectに対するデフォルト
       template_dir = "builtin",
       header_template = "UObject.h.tpl",
       source_template = "UObject.cpp.tpl",
@@ -114,78 +119,90 @@ opts = {
       direct_includes = { '"UObject/Object.h"' },
     },
   },
-  -- ソースからヘッダー、ヘッダーからソースの検索するためのルール
-  folder_rules =folder_rules = {
-    -- Basic Public <-> Private mapping
+  -- 対応するソース/ヘッダーファイルを検索するためのフォルダマッピングルール
+  folder_rules = {
+    -- 基本的な Public <-> Private マッピング
     { type = "header",  regex = "^[Pp]ublic$", replacement = "Private" },
     { type = "source",  regex = "^[Pp]rivate$", replacement = "Public" },
     { type = "header",  regex = "^[Cc]lasses$", replacement = "Sources" },
     { type = "source",  regex = "^[Ss]ources$", replacement = "Classes" },
     
-    -- Example of an asymmetric rule (as you pointed out)
+    -- 非対称なルールの例
     -- { regex = "^Headers$", replacement = "Private" },
     -- { regex = "^Private$", replacement = "Headers" },
   },
-
 }
 ```
 
 ## ⚡ 使い方 (Usage)
 
-
-### 1. `:UCM` 
-
-引数がない場合はuiが起動します
+全てのコマンドは `:UCM` から始まります。引数がない場合はUIが起動します。
 
 ```viml
-:UCM new <ClassName> <ParentClass> [TargetDir] " 新しいクラスを直接作成
-:UCM delete <Relative/Path/To/File>           " クラスファイルを直接削除 (拡張子省略可)
-:UCM rename <Relative/Path/To/File> <NewName> " クラスファイルを直接リネーム (拡張子省略可)
-:UCM move <移動元のファイルパス> <移動先のディレクトリ> " クラスを新しいディレクトリに移動
-:UCM switch                                   " ヘッダー/ソースを切り替え
-:UCM copy_include                             " 現在のファイルの #include パスをコピー
-:UCM copy_include!                            " クラスを選択して #include パスをコピー
-:UCM specifiers                               " 現在の行のマクロ(UPROPERTY等)に対応するスペシファイアを挿入
-:UCM specifiers!                              " マクロの種類を強制的に選択してスペシファイアを挿入
+" 新しいクラスを直接作成します
+:UCM new <ClassName> <ParentClass> [TargetDir]
+
+" クラスファイルを直接削除します (拡張子は省略可)
+:UCM delete <Relative/Path/To/File>
+
+" クラスファイルを直接リネームします (拡張子は省略可)
+:UCM rename <Relative/Path/To/File> <NewName>
+
+" クラスを新しいディレクトリに移動します
+:UCM move <Source/File/Path> <Target/Dir>
+
+" ヘッダーファイル (.h) とソースファイル (.cpp) を切り替えます
+:UCM switch
+
+" カーソル下の関数宣言の実装コードを生成し、クリップボードにコピーします
+:UCM copy_imp
+
+" 現在のファイルの正しい相対 #include パスをクリップボードにコピーします
+:UCM copy_include
+
+" プロジェクト内のクラスを選択し、その #include パスをコピーします
+:UCM copy_include!
+
+" 現在の行のマクロコンテキスト (例: UPROPERTY) に対応するスペシファイアを挿入します
+:UCM specifiers
+
+" マクロの種類 (UPROPERTY/UFUNCTION等) を強制的に選択してスペシファイアを挿入します
+:UCM specifiers!
 ```
 
 ## 🤖 API & 自動化 (Automation Examples)
-`UCM.api`モジュールを使って、`Neo-tree`のようなファイラーと連携できます。
-すべてのAPIはdocumentで確認してください
-```viml
-:help ucm
-```
 
-### 🌲 neo-tree で選択したてクラス作成、クラスの削除、クラスのリネイム
+`UCM.api`モジュールを使用して、`Neo-tree`のようなファイラーと連携できます。
+全てのAPIの詳細は `:help ucm` で確認してください。
+
+### 🌲 Neo-tree からクラスの作成・削除・リネームを行う
+
 ```lua
-    opts = {
-      close_if_last_window  = true,
-      -- Neo-tree のキーマッピング設定例
-      filesystem = {
-        use_libuv_file_watcher = true,
-        window = {
-          mappings = {
-            ["<leader>n"] = function(state)
-              local node = state.tree:get_node()
-              require("UCM.api").new_class({ target_dir = node.path })
-            end,
-            ["<leader>d"] = function(state)
-              -- Neo-treeから取得したパスを、そのままコマンドの引数として渡すだけ！
-              local node = state.tree:get_node()
-              vim.api.nvim_echo({{ node.path, "Normal" }}, true, { err = false })
-              require("UCM.api").delete_class({ file_path = node.path })
-            end,
-            ["<leader>r"] = function(state)
-              local node = state.tree:get_node()
-              require("UCM.api").rename_class(
-                { file_path = node.path, })
-            end,
-          },
-        },
+opts = {
+  close_if_last_window  = true,
+  -- Neo-tree のキーマッピング設定例
+  filesystem = {
+    use_libuv_file_watcher = true,
+    window = {
+      mappings = {
+        ["<leader>n"] = function(state)
+          local node = state.tree:get_node()
+          require("UCM.api").new_class({ target_dir = node.path })
+        end,
+        ["<leader>d"] = function(state)
+          -- Neo-treeから取得したパスを、そのままコマンドの引数として渡すだけ！
+          local node = state.tree:get_node()
+          require("UCM.api").delete_class({ file_path = node.path })
+        end,
+        ["<leader>r"] = function(state)
+          local node = state.tree:get_node()
+          require("UCM.api").rename_class({ file_path = node.path })
+        end,
       },
     },
+  },
+},
 ```
-
 
 ## その他
 
@@ -217,6 +234,7 @@ Unreal Engine 関連プラグイン:
       * .usfや.ushなどのUnreal Shader用のシンタックスハイライトを提供します。
 
 ## 📜 ライセンス (License)
+
 MIT License
 
 Copyright (c) 2025 taku25
@@ -238,3 +256,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+

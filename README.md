@@ -2,7 +2,6 @@
 
 # Unreal Class Manager 💓 Neovim
 
-
 <table>
   <tr>
    <td><div align=center><img width="100%" alt="UCM New Class Interactive Demo" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/main-image-new.png" /></div></td>
@@ -10,49 +9,51 @@
   </tr>
 </table>
 
-`UCM.nvim` is a plugin for managing your Unreal Engine C++ classes (creation, file switching, renaming, deletion) from within Neovim.
+`UCM.nvim` is a Neovim plugin designed to streamline the management of Unreal Engine C++ classes. It allows you to create, switch, rename, delete, and generate implementation code for C++ classes directly from Neovim, following project-specific rules.
 
-[English](./README.md) | [日本語 (Japanese)](./README_ja.md)
+[English](README.md) | [日本語 (Japanese)](README_ja.md)
 
 -----
 
 ## ✨ Features
 
-  * **Data-driven Design**:
-      * Centrally manage project-specific complex folder structures (`Public`/`Private`) and diverse class rules in a configuration file.
-      * Class creation, renaming, deletion, and switching between source/header files are determined based on these rules.
-        **Note: All operations are file-system based. Renaming class symbols within the code should be handled by your LSP.**
-  * **UI**:
-      * For `new`, `rename`, and `delete` commands, UI frontends like [Telescope](https://github.com/nvim-telescope/telescope.nvim) or [fzf-lua](https://github.com/ibhagwan/fzf-lua) are automatically detected and used.
-      * It's also possible to specify one explicitly. If neither is installed, the native Neovim UI is used as a fallback.
+  * **Data-Driven Architecture**:
+      * Centrally manage project-specific folder structures (e.g., `Public`/`Private` separation) and class creation rules via `conf.lua`.
+      * Class creation, renaming, deletion, and header/source switching are executed based on these robust rules.
+      * **Note:** Operations are file-system based. Renaming class symbols within the code should be handled by your LSP.
+  * **Seamless UI Integration**:
+      * Automatically detects and utilizes [Telescope](https://github.com/nvim-telescope/telescope.nvim) or [fzf-lua](https://github.com/ibhagwan/fzf-lua) as the frontend for `new`, `rename`, and `delete` commands.
+      * Falls back to the native Neovim UI if no external UI plugin is installed.
+  * **Intelligent Implementation Generation**:
+      * The `:UCM copy_imp` command automatically generates the C++ implementation stub for the function declaration under the cursor.
+      * It intelligently strips `UFUNCTION` macros, `virtual`/`override` keywords, and default arguments (`= 0.f`), while automatically adding the class scope and `Super::` calls where appropriate.
   * **Smart Includes**:
-      * Calculates the correct relative `#include` path (from `Public`/`Classes` folders) for the current file or any selected class and copies it to the clipboard.
+      * Automatically calculates the correct relative `#include` path (from module `Public` or `Classes` folders) for the current file or a selected class and copies it to the clipboard.
   * **Macro Wizard**:
-      * Provides an intelligent completion wizard for Unreal Engine reflection macros (UPROPERTY, UFUNCTION, UCLASS, etc.).
-      * You can interactively select and insert multiple specifiers (e.g., EditAnywhere, BlueprintReadWrite) directly into your code.
+      * Provides an intelligent completion wizard for Unreal Engine reflection macros (`UPROPERTY`, `UFUNCTION`, etc.).
+      * Allows interactive multi-selection of appropriate specifiers (e.g., `EditAnywhere`, `BlueprintReadWrite`) to insert directly into your code.
 
 <table>
   <tr>
    <td>
    <div align=center>
    <img width="100%" alt="UCM new gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-new.gif" /><br>
-   <code>:UCM new</code> コマンド
+   <code>:UCM new</code> Command
    </div>
    </td>
    <td>
    <div align=center>
    <img width="100%" alt="UCM rename gif" src="https://raw.githubusercontent.com/taku25/UCM.nvim/images/assets/ucmui-rename.gif" /><br>
-   <code>:UCM rename</code> コマンド
+   <code>:UCM rename</code> Command
    </div>
    </td>
   </tr>
 </table>
 
-
-
 ## 🔧 Requirements
 
   * Neovim v0.11.3 or higher
+  * [**UNL.nvim**](https://github.com/taku25/UNL.nvim) (**Required**)
   * **Optional (Strongly recommended for an enhanced UI experience):**
       * [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim)
       * [fzf-lua](https://github.com/ibhagwan/fzf-lua)
@@ -60,22 +61,24 @@
 
 ## 🚀 Installation
 
-Example configuration for [lazy.nvim](https://github.com/folke/lazy.nvim):
+Install with your favorite plugin manager.
+
+### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 return {
   'taku25/UCM.nvim',
   dependencies = {
     "taku25/UNL.nvim", -- Required!
-    -- Either one
-    "nvim-telescope/telescope.nvim", -- optional
-    "ibhagwan/fzf-lua", -- optional
+    -- Optional UI backends
+    "nvim-telescope/telescope.nvim",
+    "ibhagwan/fzf-lua",
   },
   opts = {
     -- Configure as you see fit
   },
 }
-```
+````
 
 ## ⚙️ Configuration
 
@@ -133,30 +136,44 @@ opts = {
 
 ## ⚡ Usage
 
-### 1\. `:UCM`
-
-If no arguments are provided, a UI will be launched.
+All commands start with `:UCM`. If no arguments are provided, a UI will be launched.
 
 ```viml
-:UCM new <ClassName> <ParentClass> [TargetDir] " Directly create a new class
-:UCM delete <Relative/Path/To/File>           " Directly delete a class file (extension is optional)
-:UCM rename <Relative/Path/To/File> <NewName> " Directly rename a class file (extension is optional)
-:UCM move <Source/File/Path> <Target/Dir>    " Move a class to a new directory
-:UCM switch                                   " Switch between header/source
-:UCM copy_include                             " Copy #include path for current file to clipboard
-:UCM copy_include!                            " Pick a class and copy its #include path
-:UCM specifiers                               " Insert specifiers for the current macro context (e.g. UPROPERTY)
-:UCM specifiers!                              " Force open macro type selector (UPROPERTY/UFUNCTION/etc)
+" Directly create a new class.
+:UCM new <ClassName> <ParentClass> [TargetDir]
+
+" Directly delete a class file (extension is optional).
+:UCM delete <Relative/Path/To/File>
+
+" Directly rename a class file (extension is optional).
+:UCM rename <Relative/Path/To/File> <NewName>
+
+" Move a class to a new directory.
+:UCM move <Source/File/Path> <Target/Dir>
+
+" Switch between the header (.h) and source (.cpp) file.
+:UCM switch
+
+" Generates the implementation code for the function declaration under the cursor and copies it to the clipboard.
+:UCM copy_imp
+
+" Copy the correct relative #include path for the current file to the clipboard.
+:UCM copy_include
+
+" Pick a class from the project list and copy its #include path.
+:UCM copy_include!
+
+" Insert specifiers for the current macro context (e.g. UPROPERTY).
+:UCM specifiers
+
+" Force open the macro type selector (UPROPERTY/UFUNCTION/etc) and insert specifiers.
+:UCM specifiers!
 ```
 
 ## 🤖 API & Automation Examples
 
 You can use the `UCM.api` module to integrate with file explorers like `Neo-tree`.
-Please check the documentation for all APIs.
-
-```viml
-:help ucm
-```
+Please check the documentation for all APIs via `:help ucm`.
 
 ### 🌲 Create, delete, and rename classes from Neo-tree
 
@@ -215,7 +232,7 @@ opts = {
       * Provides syntax highlighting using tree-sitter, including UCLASS, etc.
   * [tree-sitter for Unreal Engine Shader](https://github.com/taku25/tree-sitter-unreal-shader)
       * Provides syntax highlighting for Unreal Shaders like .usf, .ush.
-    
+
 ## 📜 License
 
 MIT License
