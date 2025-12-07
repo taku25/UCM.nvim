@@ -35,6 +35,10 @@ function M.setup()
       capability = "ucm.get_class_pair",
       impl = require("UCM.provider.class_pair"),
     },
+    {
+      capability = "ucm.get_file_symbols",
+      impl = require("UCM.provider.symbols"),
+    },
   }
 
   -- ループで一括登録
