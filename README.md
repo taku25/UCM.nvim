@@ -168,6 +168,9 @@ All commands start with `:UCM`. If no arguments are provided, a UI will be launc
 
 " Force open the macro type selector (UPROPERTY/UFUNCTION/etc) and insert specifiers.
 :UCM specifiers!
+
+" Show a flat list of symbols (functions, properties, etc.) in the current file for quick navigation.
+:UCM symbols
 ```
 
 ## 🤖 API & Automation Examples

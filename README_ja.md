@@ -168,6 +168,9 @@ opts = {
 
 " マクロの種類 (UPROPERTY/UFUNCTION等) を強制的に選択してスペシファイアを挿入します
 :UCM specifiers!
+
+" 現在のファイルのシンボル（関数、プロパティなど）をフラットなリストで表示し、ジャンプします
+:UCM symbols
 ```
 
 ## 🤖 API & 自動化 (Automation Examples)
