@@ -83,5 +83,10 @@ builder.create({
       desc = "UCM: Copy C++ implementation code for the current declaration.",
       args = {},
     },
+    ["symbols"] = {
+      handler = function(opts) ucm_api.symbols(opts) end,
+      desc = "Show symbols (functions/properties) in the current file.",
+      args = { { name = "file_path", required = false } },
+    },
   },
 })

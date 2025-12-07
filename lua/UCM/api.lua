@@ -8,7 +8,7 @@ local move_cmd = require("UCM.cmd.move")
 local copy_include_cmd = require("UCM.cmd.copy_include")
 local specifiers_cmd = require("UCM.cmd.specifiers")
 local copy_imp_cmd = require("UCM.cmd.copy_imp")
-
+local symbols_cmd = require("UCM.cmd.symbols")
 local M = {}
 
 -- @param opts table: { class_name, parent_class, target_dir, skip_confirmation = boolean (optional) }
@@ -42,5 +42,8 @@ function M.copy_implementation()
 end
 function M.specifiers(opts)
   specifiers_cmd.run(opts)
+end
+function M.symbols(opts)
+  symbols_cmd.execute(opts)
 end
 return M
