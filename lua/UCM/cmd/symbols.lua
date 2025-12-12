@@ -1,3 +1,4 @@
+-- lua/UCM/cmd/symbols.lua
 local unl_picker = require("UNL.backend.picker")
 local unl_api = require("UNL.api")
 local unl_buf_open = require("UNL.buf.open")
@@ -6,35 +7,33 @@ local log = require("UCM.logger")
 
 local M = {}
 
--- ★追加: 階層構造をフラットなリストに変換する関数
-local function flatten_hierarchy(symbols)
+-- 階層構造をフラットなリストに変換する関数
+local function flatten_hierarchy(symbols, default_path)
   local flat_list = {}
   
   for _, item in ipairs(symbols) do
-    -- 1. クラス/構造体自体もリストに追加
+    item.file_path = item.file_path or default_path
     table.insert(flat_list, item)
 
-    -- 2. クラス/構造体なら、その中身（メソッド・プロパティ）を取り出して追加
     if item.kind == "UClass" or item.kind == "Class" or 
        item.kind == "UStruct" or item.kind == "Struct" then
        
-       -- Methods (関数)
        if item.methods then
          for _, access in ipairs({"public", "protected", "private", "impl"}) do
            if item.methods[access] then
              for _, method in ipairs(item.methods[access]) do
-               -- 親クラス名などの情報を付与しておくと表示時に便利（今回はシンプルに追加）
+               method.file_path = method.file_path or item.file_path
                table.insert(flat_list, method)
              end
            end
          end
        end
 
-       -- Fields (変数/プロパティ)
        if item.fields then
          for _, access in ipairs({"public", "protected", "private", "impl"}) do
            if item.fields[access] then
              for _, field in ipairs(item.fields[access]) do
+               field.file_path = field.file_path or item.file_path
                table.insert(flat_list, field)
              end
            end
@@ -48,8 +47,7 @@ end
 
 -- シンボルリストをピッカーで表示する
 local function show_picker(file_path, symbols)
-  -- ★修正: ここでフラット化を実行
-  local flat_symbols = flatten_hierarchy(symbols)
+  local flat_symbols = flatten_hierarchy(symbols, file_path)
   local items = {}
   
   for _, item in ipairs(flat_symbols) do
@@ -57,20 +55,17 @@ local function show_picker(file_path, symbols)
     local kind_lower = kind:lower()
     
     local icon = " "
-    local hl_group = "Function" 
-
+    
     if kind_lower:find("function") then 
         icon = "󰊕 "
-        hl_group = "Function"
     elseif kind_lower:find("property") or kind_lower:find("field") then 
         icon = " " 
-        hl_group = "Identifier"
     elseif kind_lower:find("class") or kind_lower:find("struct") then 
         icon = "󰌗 " 
-        hl_group = "Type"
     elseif kind_lower:find("enum") then 
         icon = "En " 
-        hl_group = "Type"
+    elseif kind_lower:find("implementation") then
+        icon = " "
     end
 
     table.insert(items, {
@@ -79,7 +74,6 @@ local function show_picker(file_path, symbols)
       filename = item.file_path,
       lnum = item.line,
       kind = kind,
-      -- アイコン部分の色付けなどが可能なピッカー用に情報を残す
       icon = icon,
     })
   end
@@ -94,28 +88,50 @@ local function show_picker(file_path, symbols)
     items = items,
     conf = ucm_config,
     preview_enabled = true,
-    
-    -- telescopeなどで表示順を維持させるためのオプション（もしあれば）
     sorter_opts = { preserve_order = true },
 
     on_submit = function(selection)
-      if selection and selection.value then
-        -- 該当行へジャンプ
-        unl_buf_open.safe({ 
-            file_path = selection.filename, 
-            open_cmd = "edit", 
-            plugin_name = "UCM" 
-        })
-        vim.api.nvim_win_set_cursor(0, { selection.lnum, 0 })
-        vim.cmd("normal! zz")
+      if not selection then return end
+      
+      -- ★修正: selection が item そのものである場合と、ラッパー(value)である場合の両方に対応
+      local data = selection.value or selection
+
+      -- 1. ファイルパスの取得
+      -- selection.filename (Picker用) か data.file_path (元データ) のどちらかある方を使う
+      local target_path = data.file_path or data.filename or selection.filename
+      
+      -- 2. 行番号の取得
+      -- data.line (元データ/Tree-sitter) か data.lnum (Picker用) のどちらかある方を使う
+      local target_line = data.line or data.lnum or selection.lnum
+
+      if target_path then
+          unl_buf_open.safe({ 
+              file_path = target_path, 
+              open_cmd = "edit", 
+              plugin_name = "UCM" 
+          })
+      else
+          log.get().warn("Jump target filename is nil.")
+          return
+      end
+      
+      if target_line then
+          local line = tonumber(target_line)
+          if line then
+              -- Tree-sitter由来(line)なら0-basedなので +1
+              -- Picker由来(lnum)なら通常1-basedだが、元のデータが0-basedならそのまま来ている可能性が高い
+              -- ユーザーログの "line = 30" (GetDestroyOnSystemFinish) は0-based (エディタ上31行目) なので +1 が正解
+              local ok, err = pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
+              if not ok then
+                  log.get().warn("Failed to set cursor: " .. tostring(err))
+              end
+              vim.cmd("normal! zz")
+          end
       end
     end
   })
 end
 
----
--- メイン実行関数
--- @param opts table { file_path = "..." (optional) }
 function M.execute(opts)
   opts = opts or {}
   local target_file = opts.file_path or vim.api.nvim_buf_get_name(0)
@@ -126,7 +142,6 @@ function M.execute(opts)
 
   log.get().debug("Parsing symbols for: %s", target_file)
 
-  -- プロバイダー経由で解析結果を取得
   local ok, symbols = unl_api.provider.request("ucm.get_file_symbols", {
       file_path = target_file
   })
