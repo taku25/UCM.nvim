@@ -263,19 +263,20 @@ function M.run(opts)
         for file_path, details in pairs(header_details) do
           if details.classes then
             for _, class_info in ipairs(details.classes) do
-              if not seen_classes[class_info.class_name] and not class_info.is_final and not class_info.is_interface then
+              local c_name = class_info.name or class_info.class_name
+              if c_name and not seen_classes[c_name] and not class_info.is_final and not class_info.is_interface then
                 
                 table.insert(dynamic_choices, {
-                  value = class_info.class_name,
+                  value = c_name,
                   label = string.format("%-40s (%s)   %s",
-                    class_info.class_name,
+                    c_name,
                     class_info.base_class or "UObject",
                     vim.fn.fnamemodify(file_path, ":t")),
                   filename = file_path, -- この行を追加！
                 })
 
-                seen_classes[class_info.class_name] = true
-                class_data_map[class_info.class_name] = {
+                seen_classes[c_name] = true
+                class_data_map[c_name] = {
                   header_file = file_path,
                   base_class = class_info.base_class
                 }
