@@ -142,8 +142,9 @@ local function find_previous_function_name(current_row, bufnr)
     -- 簡易的に、Treesitterクエリで全関数を取得して、current_rowの直前のものを探す
     local query_str = [[ (function_definition declarator: (function_declarator declarator: (qualified_identifier name: (identifier) @fname))) @def ]]
     local query = vim.treesitter.query.parse("cpp", query_str)
-    local parsers = require("nvim-treesitter.parsers") -- TODO: remove dependency if possible or pcall
-    local parser = parsers.get_parser(bufnr, "cpp")
+    
+    local ok, parser = pcall(vim.treesitter.get_parser, bufnr, "cpp")
+    if not ok then return nil end
     local tree = parser:parse()[1]
     
     local best_func = nil
@@ -632,18 +633,63 @@ function M.execute()
   -- INSERT MODE (New Declaration)
   -- アンカー探索:
   -- 実装側で「自分よりひとつ前にある関数」を見つけ、ヘッダー内のその関数の後ろに追加する
-  -- TODO: 正確な「前の関数」を見つけるロジックは実装コストが高いので、
-  -- ここでは簡易版として「ヘッダーのクラス定義の末尾（publicセクションがあればそこ、なければ一番下）」に追加する。
-  -- ユーザーからの要望「Riderのように」に応えるならアンカー探索が必要だが、まずは動くものを作る。
   
-  -- 改善案: ヘッダー内のメソッドリストを見て、挿入位置を決める
-  -- デフォルト: publicの最後
-  local methods = class_data.methods.public
-  local insert_line = class_data.end_line - 1 -- クラス終了の "};" の前
+  local insert_line = class_data.end_line - 1 -- Default: End of class (before "};")
   
-  -- もしpublicメソッドがあれば、その最後のものの後ろ
-  if methods and #methods > 0 then
-      insert_line = methods[#methods].line
+  -- 1. Try to find the previous function in cpp
+  local node_stats_r, _, _, _ = node:range()
+  local prev_func_name = find_previous_function_name(node_stats_r, 0) -- 0 is current buf (cpp)
+  if prev_func_name then
+      -- 2. Find this function in header
+      -- Use TS scan similar to update check
+      local ok, parser = pcall(vim.treesitter.get_parser, target_buf, "cpp")
+      if ok and parser then
+          local tree = parser:parse()[1]
+          local root = tree:root()
+          
+           -- UNLの情報を信頼してクラスノードを探す
+          local class_node = root:named_descendant_for_range(class_data.line - 1, 0, class_data.end_line - 1, 0)
+          while class_node do
+               if class_node:type() == "class_specifier" or class_node:type() == "struct_specifier" then break end
+               class_node = class_node:parent()
+          end
+          if not class_node then class_node = root end
+
+          local query_str = string.format([[
+            (function_declarator declarator: (identifier) @name (#eq? @name "%s"))
+            (function_declarator declarator: (field_identifier) @name (#eq? @name "%s"))
+            (function_declarator declarator: (destructor_name) @name (#eq? @name "%s"))
+          ]], prev_func_name, prev_func_name, prev_func_name)
+          
+          local query = vim.treesitter.query.parse("cpp", query_str)
+          for _, node, _ in query:iter_captures(class_node, target_buf, 0, -1) do
+              -- Found previous function definition!
+              -- We want to insert AFTER its declaration statement.
+              -- So find the ';' at the end of this declaration.
+              
+              local decl_node = node
+              while decl_node do
+                  if decl_node:type() == "field_declaration" or decl_node:type() == "declaration" or decl_node:type() == "function_definition" or decl_node:type() == "unreal_function_declaration" then
+                      break
+                  end
+                  decl_node = decl_node:parent()
+              end
+              
+              if decl_node then
+                  local _, _, end_row, _ = decl_node:range()
+                  insert_line = end_row + 1
+                  logger.info("Found anchor function '%s'. Inserting after line %d.", prev_func_name, insert_line)
+                  -- Found anchor, break loop (first match)
+                  break
+              end
+          end
+      end
+  else
+      -- Fallback: Use last public method if any
+      local methods = class_data.methods.public
+      if methods and #methods > 0 then
+          insert_line = methods[#methods].line
+      end
   end
 
   -- 宣言コード生成
