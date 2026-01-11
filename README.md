@@ -27,6 +27,10 @@
   * **Intelligent Implementation Generation**:
       * The `:UCM copy_imp` command automatically generates the C++ implementation stub for the function declaration under the cursor.
       * It intelligently strips `UFUNCTION` macros, `virtual`/`override` keywords, and default arguments (`= 0.f`), while automatically adding the class scope and `Super::` calls where appropriate.
+  * **Rider-like Code Generation**:
+      * `:UCM create_impl`: Instantly creates a function implementation in the `.cpp` file from a declaration in the `.h` file. Automatically adds `Super::` calls for overrides.
+      * `:UCM create_decl`: Generates a function declaration in the `.h` file from an implementation in the `.cpp` file.
+      * `:UCM add_struct`: Interactively inserts a new `USTRUCT` definition. Can optionally fetch base struct suggestions from the project using `UEP`.
   * **Smart Includes**:
       * Automatically calculates the correct relative `#include` path (from module `Public` or `Classes` folders) for the current file or a selected class and copies it to the clipboard.
   * **Macro Wizard**:
@@ -171,6 +175,16 @@ All commands start with `:UCM`. If no arguments are provided, a UI will be launc
 
 " Show a flat list of symbols (functions, properties, etc.) in the current file for quick navigation.
 :UCM symbols
+
+" Interactively insert a new USTRUCT definition (can select parent struct via UEP)
+:UCM add_struct
+
+" Create function implementation in source (.cpp) from declaration in header (.h) (Rider-like)
+:UCM create_impl
+
+" Create function declaration in header (.h) from implementation in source (.cpp) (Rider-like)
+:UCM create_decl
+
 ```
 
 ## 🤖 API & Automation Examples
