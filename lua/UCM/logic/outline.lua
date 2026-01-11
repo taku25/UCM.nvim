@@ -39,7 +39,7 @@ function M.get_outline(file_path)
     -- ペアが見つからなければ単体解析
     if not pair then
         log.get().debug("Outline: No pair found for %s, parsing single file.", file_path)
-        local result = unl_parser.parse(file_path)
+        local result = unl_parser.parse(file_path, "UCM")
         return result.list or {}
     end
 
@@ -48,12 +48,12 @@ function M.get_outline(file_path)
     local cpp_path = pair.cpp
     
     -- ヘッダー解析
-    local h_result = unl_parser.parse(header_path)
+    local h_result = unl_parser.parse(header_path, "UCM")
     local symbols = h_result.list or {}
 
     -- ソースがあれば解析してマージ
     if cpp_path and vim.fn.filereadable(cpp_path) == 1 then
-        local cpp_result = unl_parser.parse(cpp_path)
+        local cpp_result = unl_parser.parse(cpp_path, "UCM")
         
         -- ヘッダー内の各クラスに対して、CPP側の実装を紐付ける
         for _, symbol in ipairs(symbols) do

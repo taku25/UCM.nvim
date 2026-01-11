@@ -22,6 +22,24 @@ builder.create({
       },
     },
 
+    ["add_struct"] = {
+      handler = function(opts) ucm_api.add_struct(opts) end,
+      desc = "Insert a new USTRUCT definition at cursor.",
+      args = {},
+    },
+
+    ["create_decl"] = {
+      handler = function(opts) ucm_api.create_declaration() end,
+      desc = "Create declaration in header from implementation in source.",
+      args = {},
+    },
+
+    ["create_impl"] = {
+      handler = function(opts) ucm_api.create_implementation() end,
+      desc = "Create implementation in source from declaration in header.",
+      args = {},
+    },
+
     ["delete"] = {
       handler = function(opts) ucm_api.delete_class(opts) end,
       desc = "Delete a class, interactively if file path is omitted.",
