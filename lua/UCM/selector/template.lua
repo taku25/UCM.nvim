@@ -106,4 +106,44 @@ function M.select(parent_class, conf, class_data_map)
 end
 -- ▲▲▲
 
+-- Struct template selection (similar to class but for structs)
+local function get_parent_struct_name(struct_name, struct_data_map)
+  if struct_data_map and struct_data_map[struct_name] and struct_data_map[struct_name].base_struct then
+    log.get().debug("Found parent struct '%s' in cache for '%s'", struct_data_map[struct_name].base_struct, struct_name)
+    return struct_data_map[struct_name].base_struct
+  end
+
+  if unl_api == nil then
+    local ok
+    ok, unl_api = pcall(require, "UNL.api")
+    if not ok then unl_api = false end
+  end
+  if not unl_api then return nil end
+
+  log.get().warn("Cache miss for '%s'. Falling back to slow API call (uep.get_project_structs) to find parent.", struct_name)
+  local req_ok, struct_details = unl_api.provider.request("uep.get_project_structs", { logger_name = "UCM"})
+  
+  if not (req_ok and struct_details) then return nil end
+  for _, details in pairs(struct_details) do
+    if details.structs then
+      for _, struct_info in ipairs(details.structs) do
+        if struct_info.struct_name == struct_name or struct_info.name == struct_name then
+          return struct_info.base_struct
+        end
+      end
+    end
+  end
+  return nil
+end
+
+function M.select_struct(parent_struct, conf, struct_data_map)
+  -- For structs, just return a default template definition
+  -- since structs don't have the complex template hierarchy like classes
+  return {
+    name = "Struct",
+    header_template = "Struct.h.tpl",
+    struct_prefix = "F",
+  }
+end
+
 return M

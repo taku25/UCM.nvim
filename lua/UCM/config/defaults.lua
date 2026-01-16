@@ -2,7 +2,7 @@
 -- UNLのデフォルト設定とマージされます。
 local M = {
   logging = {
-    level = "info",
+    level = "debug",
     echo = { level = "warn" },
     notify = { level = "error", prefix = "[UCM]" },
     file = { enable = true, max_kb = 512, rotate = 3, filename = "ucm.log" },

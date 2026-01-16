@@ -140,7 +140,6 @@ opts = {
 
 ## ⚡ 使い方 (Usage)
 
-全てのコマンドは `:UCM` から始まります。引数がない場合はUIが起動します。
 
 ```viml
 " 新しいクラスを直接作成します
@@ -178,6 +177,32 @@ opts = {
 
 " 対話的に新しい USTRUCT 定義を挿入します (UEPと連携して親構造体を選択可)
 :UCM add_struct
+
+### クラス・構造体作成コマンド
+
+#### `:UCM new`
+新しいクラスまたは構造体を作成します。親としてプロジェクト内のクラス・構造体両方から選択できます。
+
+```
+:UCM new <Name> <Parent> [TargetDir]
+```
+引数がない場合は、UIで名前と親（クラスまたは構造体）を選択できます。
+
+#### `:UCM new_class`
+新しいクラスを作成します。親としてクラスのみ選択できます。
+
+```
+:UCM new_class <ClassName> <ParentClass> [TargetDir]
+```
+引数がない場合は、UIでクラス名と親クラスを選択できます。
+
+#### `:UCM new_struct`
+新しい構造体を作成します。親として構造体のみ選択できます。
+
+```
+:UCM new_struct <StructName> <ParentStruct> [TargetDir]
+```
+引数がない場合は、UIで構造体名と親構造体を選択できます。
 
 " ヘッダー(.h)の宣言からソース(.cpp)に関数実装を作成します (Rider-like)
 :UCM create_impl

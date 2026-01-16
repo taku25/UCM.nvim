@@ -11,13 +11,32 @@ builder.create({
 
   subcommands = {
     ["new"] = {
+      handler = function(opts) ucm_api.new(opts) end,
+      desc = "Create a new class or struct, interactively if args are omitted.",
+      args = {
+        { name = "name", required = false },
+        { name = "parent", required = false },
+        { name = "target_dir", required = false },
+      },
+    },
+    ["new_class"] = {
       handler = function(opts) ucm_api.new_class(opts) end,
       desc = "Create a new class, interactively if args are omitted.",
       args = {
-        -- :UCM new MyClass AActor
         { name = "class_name", required = false },
         { name = "parent_class", required = false },
-        -- :UCM new MyClass AActor Source/MyModule/Private
+        { name = "target_dir", required = false },
+      },
+    },
+
+    ["new_struct"] = {
+      handler = function(opts) ucm_api.new_struct(opts) end,
+      desc = "Create a new struct, interactively if args are omitted.",
+      args = {
+        -- :UCM new_struct MyStruct FTableRowBase
+        { name = "struct_name", required = false },
+        { name = "parent_struct", required = false },
+        -- :UCM new_struct MyStruct FTableRowBase Source/MyModule/Private
         { name = "target_dir", required = false },
       },
     },

@@ -140,7 +140,6 @@ opts = {
 
 ## ⚡ Usage
 
-All commands start with `:UCM`. If no arguments are provided, a UI will be launched.
 
 ```viml
 " Directly create a new class.
@@ -178,6 +177,32 @@ All commands start with `:UCM`. If no arguments are provided, a UI will be launc
 
 " Interactively insert a new USTRUCT definition (can select parent struct via UEP)
 :UCM add_struct
+
+### Class/Struct Creation Commands
+
+#### `:UCM new`
+Create a new class or struct. Lets you interactively select a parent from both classes and structs in your project.
+
+```
+:UCM new <Name> <Parent> [TargetDir]
+```
+If no arguments are provided, a UI will prompt for the name and parent (class or struct).
+
+#### `:UCM new_class`
+Create a new class. Lets you select only from classes as the parent.
+
+```
+:UCM new_class <ClassName> <ParentClass> [TargetDir]
+```
+If no arguments are provided, a UI will prompt for the class name and parent class.
+
+#### `:UCM new_struct`
+Create a new struct. Lets you select only from structs as the parent.
+
+```
+:UCM new_struct <StructName> <ParentStruct> [TargetDir]
+```
+If no arguments are provided, a UI will prompt for the struct name and parent struct.
 
 " Create function implementation in source (.cpp) from declaration in header (.h) (Rider-like)
 :UCM create_impl
