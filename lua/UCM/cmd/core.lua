@@ -75,28 +75,28 @@ function M.resolve_class_pair(file_path)
 
   -- ★変更: ヘッダーファイルの探索 (候補リスト順)
   if is_header_input then
-      found_h = absolute_file
+    found_h = absolute_file
   else
-      for _, dir in ipairs(context.header_dirs) do
-          local p = fs.normalize(fs.joinpath(dir, class_name .. ".h"))
-          if vim.fn.filereadable(p) == 1 then
-              found_h = p
-              break -- 見つかったら終了
-          end
+    for _, dir in ipairs(context.header_dirs) do
+      local p = fs.normalize(fs.joinpath(dir, class_name .. ".h"))
+      if vim.fn.filereadable(p) == 1 then
+        found_h = p
+        break -- 見つかったら終了
       end
+    end
   end
 
   -- ★変更: ソースファイルの探索 (候補リスト順)
   if not is_header_input then
-      found_cpp = absolute_file
+    found_cpp = absolute_file
   else
-      for _, dir in ipairs(context.source_dirs) do
-          local p = fs.normalize(fs.joinpath(dir, class_name .. ".cpp"))
-          if vim.fn.filereadable(p) == 1 then
-              found_cpp = p
-              break -- 見つかったら終了
-          end
+    for _, dir in ipairs(context.source_dirs) do
+      local p = fs.normalize(fs.joinpath(dir, class_name .. ".cpp"))
+      if vim.fn.filereadable(p) == 1 then
+        found_cpp = p
+        break -- 見つかったら終了
       end
+    end
   end
 
   if not found_h and not found_cpp then
@@ -117,12 +117,12 @@ function M.get_fd_directory_cmd(base_path)
   local excludes = { "Intermediate", "Binaries", "Saved" }
 
   local fd_cmd = { "fd" }
-  
+
   if base_path and base_path ~= "" then
-    table.insert(fd_cmd, ".") 
-    table.insert(fd_cmd, base_path) 
+    table.insert(fd_cmd, ".")
+    table.insert(fd_cmd, base_path)
   end
-  
+
   table.insert(fd_cmd, "--regex")
   table.insert(fd_cmd, full_path_regex)
   table.insert(fd_cmd, "--full-path")
@@ -130,7 +130,7 @@ function M.get_fd_directory_cmd(base_path)
   table.insert(fd_cmd, "d")
   table.insert(fd_cmd, "--path-separator")
   table.insert(fd_cmd, "/")
-  
+
   for _, dir in ipairs(excludes) do
     table.insert(fd_cmd, "--exclude")
     table.insert(fd_cmd, dir)
@@ -145,11 +145,14 @@ function M.get_fd_files_cmd()
 
   local fd_cmd = {
     "fd",
-    "--regex", full_path_regex,
+    "--regex",
+    full_path_regex,
     "--full-path",
-    "--type", "f",
-    "--path-separator", "/",
-  } 
+    "--type",
+    "f",
+    "--path-separator",
+    "/",
+  }
 
   for _, dir in ipairs(excludes) do
     table.insert(fd_cmd, "--exclude")
@@ -159,17 +162,22 @@ function M.get_fd_files_cmd()
 end
 
 function M.get_relative_include_path(absolute_path)
-    if not absolute_path then return nil end
-    local normalized_path = absolute_path:gsub("\\", "/")
-    local match = normalized_path:match("/Source/[^/]+/[Pp]ublic/(.+)")
-               or normalized_path:match("/Source/[^/]+/[Pp]rivate/(.+)")
-               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]ublic/(.+)")
-               or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]rivate/(.+)")
-    if match then return match end
-    match = normalized_path:match("/Source/[^/]+/(.+)")
-         or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/(.+)")
-    if match then return match end
+  if not absolute_path then
     return nil
+  end
+  local normalized_path = absolute_path:gsub("\\", "/")
+  local match = normalized_path:match("/Source/[^/]+/[Pp]ublic/(.+)")
+    or normalized_path:match("/Source/[^/]+/[Pp]rivate/(.+)")
+    or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]ublic/(.+)")
+    or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/[Pp]rivate/(.+)")
+  if match then
+    return match
+  end
+  match = normalized_path:match("/Source/[^/]+/(.+)") or normalized_path:match("/Plugins/[^/]+/Source/[^/]+/(.+)")
+  if match then
+    return match
+  end
+  return nil
 end
 
 return M
