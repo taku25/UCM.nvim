@@ -18,7 +18,6 @@ function M.setup(plugin_name)
   -- or remove it. Let's keep it for now in case we need it later.
 end
 
-
 --- Finds and returns the root path of a GIVEN plugin.
 -- @param plugin_name string The name of the plugin to find.
 -- @return string|nil The absolute path to the plugin's root directory, or nil if not found.
@@ -27,7 +26,7 @@ function M.get_plugin_root_path(plugin_name)
     log.get().error("get_plugin_root_path requires a plugin_name.", vim.log.levels.ERROR)
     return nil
   end
-  
+
   if plugin_root_paths[plugin_name] then
     return plugin_root_paths[plugin_name]
   end
@@ -38,7 +37,7 @@ function M.get_plugin_root_path(plugin_name)
       return path
     end
   end
-  
+
   log.get().error("[" .. plugin_name .. "] Could not determine the plugin's root path.", vim.log.levels.WARN)
   return nil
 end
@@ -53,26 +52,13 @@ function M.get_template_base_path(template_def, plugin_name)
 
   if template_dir == "builtin" then
     local root = M.get_plugin_root_path(plugin_name)
-    if not root then return nil end
+    if not root then
+      return nil
+    end
     return root .. "/templates"
   else
     return vim.fn.expand(template_dir)
   end
 end
-
---- Splits a path into its directory components.
--- Handles both Windows and Unix-style separators.
--- @param path_str string The path to split.
--- @return table A list of directory names.
-function M.split(path_str)
-  local components = {}
-  -- `gsub`の魔法で、パス区切り文字ではない部分をすべてキャプチャする
-  for component in path_str:gmatch("([^/\\]+)") do
-    table.insert(components, component)
-  end
-  return components
-end
-
-
 
 return M
