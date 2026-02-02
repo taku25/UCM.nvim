@@ -76,7 +76,7 @@ function M.resolve_class_pair(file_path, on_complete)
   -- DBからクラス名で検索 (非同期)
   -- 注意: get_classes の第一引数は現在 opts テーブル
   unl_api.db.find_class_by_name(class_name, function(cls)
-    if not cls then
+    if not cls or cls == vim.NIL then
         -- DBになければファイル名ベースでフォールバック
         return M.resolve_class_pair_fallback(file_path, on_complete)
     end
