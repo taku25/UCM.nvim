@@ -76,9 +76,39 @@ function M.resolve_class_pair(file_path, on_complete)
   -- DBからクラス名で検索 (非同期)
   -- 注意: get_classes の第一引数は現在 opts テーブル
   unl_api.db.find_class_by_name(class_name, function(cls)
+    -- クラスが見つからない場合 (プレフィックス不一致など)、ファイル名ベースでDB検索を試みる
     if not cls or cls == vim.NIL then
-        -- DBになければファイル名ベースでフォールバック
-        return M.resolve_class_pair_fallback(file_path, on_complete)
+        local target_file_name = is_header_input and (class_name .. ".cpp") or (class_name .. ".h")
+        
+        unl_api.db.search_files(target_file_name, function(files)
+            local found_path = nil
+            if files then
+                for _, f in ipairs(files) do
+                    -- ファイル名が完全一致するものを探す
+                    if f.filename == target_file_name then
+                        found_path = f.path
+                        break
+                    end
+                end
+            end
+            
+            if found_path then
+                local h_path = is_header_input and absolute_file or found_path
+                local cpp_path = not is_header_input and absolute_file or found_path
+                -- モジュール情報は不明だが、ファイルは見つかった
+                on_complete({
+                    h = h_path,
+                    cpp = cpp_path,
+                    class_name = class_name,
+                    is_header_input = is_header_input,
+                    module = nil 
+                })
+            else
+                -- DBにもなければファイルシステムフォールバック
+                M.resolve_class_pair_fallback(file_path, on_complete)
+            end
+        end)
+        return
     end
 
     -- 対になるファイルを探す
@@ -88,15 +118,26 @@ function M.resolve_class_pair(file_path, on_complete)
     if is_header_input then
         -- ヘッダー入力時、ソースを探す
         local target_cpp = class_name .. ".cpp"
-        unl_api.db.search_files(target_cpp, function(files)
+        log.get().info("Searching for alternate file: %s in module %s", target_cpp, cls.module_name)
+        
+        -- モジュール内検索を使用 (より確実)
+        unl_api.db.search_files_in_modules({ cls.module_name }, target_cpp, 10, function(files)
             if files then
+                log.get().info("SearchFiles returned %d results", #files)
                 for _, f in ipairs(files) do
-                    -- モジュール名が一致するものを優先
-                    if f.module_name == cls.module_name or f.path:find(cls.module_root, 1, true) then
-                        cpp_path = f.path
+                    -- search_files_in_modules の戻り値は file_path キーを持つ
+                    local fname = vim.fn.fnamemodify(f.file_path, ":t")
+                    if fname == target_cpp then
+                        cpp_path = f.file_path
                         break
                     end
                 end
+                -- 見つからなければ最初の候補
+                if not cpp_path and #files > 0 then
+                    cpp_path = files[1].file_path
+                end
+            else
+                log.get().info("SearchFiles returned nil/empty for %s", target_cpp)
             end
             on_complete({
                 h = h_path,
@@ -109,13 +150,19 @@ function M.resolve_class_pair(file_path, on_complete)
     else
         -- ソース入力時、ヘッダーを探す
         local target_h = class_name .. ".h"
-        unl_api.db.search_files(target_h, function(files)
+        unl_api.db.search_files_in_modules({ cls.module_name }, target_h, 10, function(files)
             if files then
+                -- 1. モジュールルート内にあるものを優先 (search_files_in_modules は既にモジュール絞り込み済み)
                 for _, f in ipairs(files) do
-                    if f.module_name == cls.module_name or f.path:find(cls.module_root, 1, true) then
-                        h_path = f.path
+                    local fname = vim.fn.fnamemodify(f.file_path, ":t")
+                    if fname == target_h then
+                        h_path = f.file_path
                         break
                     end
+                end
+                -- 2. 見つからなければ最初の候補
+                if not h_path and #files > 0 then
+                    h_path = files[1].file_path
                 end
             end
             on_complete({
