@@ -18,37 +18,43 @@ function M.run(opts)
   local class_data_map = {}
   local project_root = require("UNL.finder").project.find_project_root(vim.fn.getcwd())
   if project_root then
-    local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", {
-      project_root = project_root,
-      logger_name = "UCM"
-    })
-    if req_ok and header_details and next(header_details) then
-      for file_path, details in pairs(header_details) do
-        if details.classes then
-          for _, info in ipairs(details.classes) do
-            local s_name = info.name or info.class_name
-            local symbol_type = info.symbol_type or info.type or ""
-            if s_name and not seen[s_name] and s_name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") then
-              if symbol_type == "class" or symbol_type == "UCLASS" or symbol_type == "struct" or symbol_type == "USTRUCT" then
-                table.insert(dynamic_choices, {
-                  value = s_name,
-                  label = string.format("%s - %s", s_name, vim.fn.fnamemodify(file_path, ":t")),
-                  filename = file_path,
-                  symbol_type = symbol_type
-                })
-                seen[s_name] = true
-                class_data_map[s_name] = {
-                  header_file = file_path,
-                  base = info.base_class or info.base_struct
-                }
+    unl_api.db.get_project_classes({ scope = "full" }, function(header_details, err)
+      if header_details and next(header_details) then
+        for file_path, details in pairs(header_details) do
+          if details.classes then
+            for _, info in ipairs(details.classes) do
+              local s_name = info.name or info.class_name
+              local symbol_type = info.symbol_type or info.type or ""
+              if s_name and not seen[s_name] and s_name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") then
+                if symbol_type == "class" or symbol_type == "UCLASS" or symbol_type == "struct" or symbol_type == "USTRUCT" then
+                  table.insert(dynamic_choices, {
+                    value = s_name,
+                    label = string.format("%s - %s", s_name, vim.fn.fnamemodify(file_path, ":t")),
+                    filename = file_path,
+                    symbol_type = symbol_type
+                  })
+                  seen[s_name] = true
+                  class_data_map[s_name] = {
+                    header_file = file_path,
+                    base = info.base_class or info.base_struct
+                  }
+                end
               end
             end
           end
         end
       end
-    end
+      
+      -- Picker表示 (非同期完了後)
+      M._internal_show_picker(dynamic_choices, class_data_map, name, opts)
+    end)
+  else
+    -- ルートが見つからない場合、空リストで表示
+    M._internal_show_picker(dynamic_choices, class_data_map, name, opts)
   end
+end
 
+function M._internal_show_picker(dynamic_choices, class_data_map, name, opts)
   local function on_parent_selected(choice)
     if not choice then return end
     local parent = choice.value

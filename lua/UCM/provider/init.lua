@@ -51,7 +51,7 @@ function M.setup()
     })
   end
 
-  log.info("Registered UCM.nvim providers to UNL.nvim for capabilities: ucm.class.*")
+  log.debug("Registered UCM.nvim providers to UNL.nvim for capabilities: ucm.class.*")
 end
 
 return M

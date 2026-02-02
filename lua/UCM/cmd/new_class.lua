@@ -229,6 +229,8 @@ function M.run(opts)
   local base_dir = opts.target_dir or vim.loop.cwd()
   local collected_opts = { on_complete = opts.on_complete }
 
+  local show_picker -- Forward declaration
+
   local function ask_for_parent_class()
     local class_data_map = {}
     local static_choices = {}
@@ -249,45 +251,55 @@ function M.run(opts)
     local dynamic_choices = {}
     local unl_api_ok, unl_api = pcall(require, "UNL.api")
     if unl_api_ok then
-      log.get().info("Fetching project classes from UEP.nvim provider...")
+      log.get().info("Fetching project classes from UNL.db...")
       local project_root = require("UNL.finder").project.find_project_root(base_dir)
       if not project_root then
         log.get().warn("Could not find project root from '%s'. Cannot fetch dynamic classes.", base_dir)
       end
-      local req_ok, header_details = unl_api.provider.request("uep.get_project_classes", {
-        project_root = project_root,
-        logger_name = "UCM"
-      })
-      if req_ok and header_details and next(header_details) then
-        log.get().info("Successfully fetched %d header details.", vim.tbl_count(header_details))
-        for file_path, details in pairs(header_details) do
-          if details.classes then
-            for _, class_info in ipairs(details.classes) do
-              local c_name = class_info.name or class_info.class_name
-              if c_name and not seen_classes[c_name] and c_name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") and not class_info.is_final and not class_info.is_interface then
-                
-                table.insert(dynamic_choices, {
-                  value = c_name,
-                  label = string.format("%s - %s", c_name, vim.fn.fnamemodify(file_path, ":t")),
-                  filename = file_path, -- この行を追加！
-                })
-
-                seen_classes[c_name] = true
-                class_data_map[c_name] = {
-                  header_file = file_path,
-                  base_class = class_info.base_class
-                }
-              end
-            end
+      
+      unl_api.db.get_classes({ extra_where = "AND (c.symbol_type = 'class' OR c.symbol_type = 'UCLASS')" }, function(classes, err)
+          if err then
+              log.get().error("Error getting classes: " .. tostring(err))
+              classes = nil
           end
-        end
-      else
-        log.get().info("Could not get class data from UEP.nvim. Using static template list only.")
-      end
+          
+          if classes and #classes > 0 then
+            log.get().info("Successfully fetched %d classes.", #classes)
+            for _, class_info in ipairs(classes) do
+                  local c_name = class_info.name
+                  local file_path = class_info.path
+                  
+                  if c_name and not seen_classes[c_name] and c_name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") then
+                    
+                    table.insert(dynamic_choices, {
+                      value = c_name,
+                      label = string.format("%s - %s", c_name, vim.fn.fnamemodify(file_path, ":t")),
+                      filename = file_path, 
+                    })
+
+                    seen_classes[c_name] = true
+                    class_data_map[c_name] = {
+                      header_file = file_path,
+                      base_class = class_info.base_class
+                    }
+                  end
+            end
+          else
+            log.get().info("No class data from UNL.db. Using static template list only.")
+          end
+          
+          -- Continue with picker show
+          show_picker(dynamic_choices, static_choices, class_data_map)
+      end)
+      return -- Exit function, wait for callback
     else
       log.get().info("UNL.api not available. Using static template list only.")
+      show_picker(dynamic_choices, static_choices, class_data_map)
     end
+  end
 
+  -- Move picker logic to separate function to support async flow
+  show_picker = function(dynamic_choices, static_choices, class_data_map)
     table.sort(dynamic_choices, function(a, b) return a.value < b.value end)
     table.sort(static_choices, function(a, b) return a.value < b.value end)
     local all_choices = vim.list_extend(dynamic_choices, static_choices)

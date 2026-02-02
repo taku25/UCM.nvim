@@ -203,6 +203,8 @@ function M.run(opts)
   local base_dir = opts.target_dir or vim.loop.cwd()
   local collected_opts = { on_complete = opts.on_complete }
 
+  local show_picker -- Forward declaration
+
   local function ask_for_parent_struct()
     local struct_data_map = {}
     local static_choices = {
@@ -214,25 +216,21 @@ function M.run(opts)
     local seen_structs = {}
     local unl_api_ok, unl_api = pcall(require, "UNL.api")
     if unl_api_ok then
-      log.get().info("Fetching project structs from UEP.nvim provider...")
-      local project_root = require("UNL.finder").project.find_project_root(base_dir)
-      if not project_root then
-        log.get().warn("Could not find project root from '%s'. Cannot fetch dynamic structs.", base_dir)
-      end
-      local req_ok, struct_list = unl_api.provider.request("uep.get_project_classes", {
-        project_root = project_root,
-        logger_name = "UCM"
-      })
-      if req_ok and struct_list and next(struct_list) then
-        log.get().info("Successfully fetched struct details from uep.get_project_classes.")
-        for file_path, details in pairs(struct_list) do
-          if details.classes then
-            for _, struct_info in ipairs(details.classes) do
-              local s_name = struct_info.name or struct_info.class_name
-              -- Filter for valid struct names and avoid duplicates
+      log.get().info("Fetching project structs from UNL.db...")
+      
+      unl_api.db.get_classes({ extra_where = "AND (c.symbol_type = 'struct' OR c.symbol_type = 'USTRUCT')" }, function(structs, err)
+          if err then
+              log.get().error("Error getting structs: " .. tostring(err))
+              structs = nil
+          end
+          
+          if structs and #structs > 0 then
+            log.get().info("Successfully fetched %d structs.", #structs)
+            for _, struct_info in ipairs(structs) do
+              local s_name = struct_info.name
+              local file_path = struct_info.path
+              
               if s_name and not seen_structs[s_name] and s_name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") then
-                local symbol_type = struct_info.symbol_type or struct_info.type or ""
-                if symbol_type == "struct" or symbol_type == "USTRUCT" then
                   table.insert(dynamic_choices, {
                     value = s_name,
                     label = string.format("%s - %s", s_name, vim.fn.fnamemodify(file_path, ":t")),
@@ -243,18 +241,23 @@ function M.run(opts)
                     header_file = file_path,
                     base_struct = struct_info.base_class
                   }
-                end
               end
             end
+          else
+            log.get().info("No struct data from UNL.db.")
           end
-        end
-      else
-        log.get().info("Could not get struct data from UEP.nvim.")
-      end
+          
+          show_picker(dynamic_choices, static_choices, struct_data_map)
+      end)
+      return -- Exit, wait for async callback
     else
       log.get().info("UNL.api not available.")
+      show_picker(dynamic_choices, static_choices, struct_data_map)
     end
+  end
 
+  -- Move picker logic to separate function to support async flow
+  show_picker = function(dynamic_choices, static_choices, struct_data_map)
     table.sort(dynamic_choices, function(a, b) return a.value < b.value end)
     table.sort(static_choices, function(a, b) return a.value < b.value end)
     local all_choices = vim.list_extend(dynamic_choices, static_choices)

@@ -1,6 +1,7 @@
 -- lua/UCM/cmd/core.lua
 
 local unl_finder = require("UNL.finder")
+local unl_path = require("UNL.path")
 local selectors = require("UCM.selector")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
@@ -54,54 +55,105 @@ end
 ---
 -- 'switch', 'delete', 'rename'のために、既存のクラスペアを解決する
 -- @param file_path string
--- @return table|nil, string
-function M.resolve_class_pair(file_path)
+-- @param on_complete function|nil (table|nil, string|nil) - もしnilなら同期的にFSから検索する
+function M.resolve_class_pair(file_path, on_complete)
   local absolute_file = fs.normalize(file_path)
-
   if vim.fn.filereadable(absolute_file) ~= 1 then
-    return nil, "Input file does not exist: " .. absolute_file
-  end
-
-  local context, err = M.resolve_creation_context(fs.dirname(absolute_file))
-  if not context then
-    return nil, err
+    local err = "Input file does not exist: " .. absolute_file
+    if on_complete then return on_complete(nil, err) else return nil, err end
   end
 
   local class_name = vim.fn.fnamemodify(absolute_file, ":t:r")
   local is_header_input = absolute_file:match("%.h$") and true or false
 
-  local found_h = nil
-  local found_cpp = nil
+  -- 非同期コールバックがない場合は、同期的にFSから探す (互換性のため)
+  if not on_complete then
+    return M.resolve_class_pair_fallback_sync(file_path)
+  end
 
-  -- ★変更: ヘッダーファイルの探索 (候補リスト順)
+  local unl_api = require("UNL.api")
+  
+  -- DBからクラス名で検索 (非同期)
+  -- 注意: get_classes の第一引数は現在 opts テーブル
+  unl_api.db.find_class_by_name(class_name, function(cls)
+    if not cls then
+        -- DBになければファイル名ベースでフォールバック
+        return M.resolve_class_pair_fallback(file_path, on_complete)
+    end
+
+    -- 対になるファイルを探す
+    local h_path = is_header_input and absolute_file or nil
+    local cpp_path = not is_header_input and absolute_file or nil
+
+    if is_header_input then
+        -- ヘッダー入力時、ソースを探す
+        local target_cpp = class_name .. ".cpp"
+        unl_api.db.search_files(target_cpp, function(files)
+            if files then
+                for _, f in ipairs(files) do
+                    -- モジュール名が一致するものを優先
+                    if f.module_name == cls.module_name or f.path:find(cls.module_root, 1, true) then
+                        cpp_path = f.path
+                        break
+                    end
+                end
+            end
+            on_complete({
+                h = h_path,
+                cpp = cpp_path,
+                class_name = class_name,
+                is_header_input = is_header_input,
+                module = { name = cls.module_name, root = cls.module_root }
+            })
+        end)
+    else
+        -- ソース入力時、ヘッダーを探す
+        local target_h = class_name .. ".h"
+        unl_api.db.search_files(target_h, function(files)
+            if files then
+                for _, f in ipairs(files) do
+                    if f.module_name == cls.module_name or f.path:find(cls.module_root, 1, true) then
+                        h_path = f.path
+                        break
+                    end
+                end
+            end
+            on_complete({
+                h = h_path,
+                cpp = cpp_path,
+                class_name = class_name,
+                is_header_input = is_header_input,
+                module = { name = cls.module_name, root = cls.module_root }
+            })
+        end)
+    end
+  end)
+end
+
+-- 同期版フォールバック (UNXなどの同期コンテキスト用)
+function M.resolve_class_pair_fallback_sync(file_path)
+  local absolute_file = fs.normalize(file_path)
+  local context, err = M.resolve_creation_context(fs.dirname(absolute_file))
+  if not context then return nil, err end
+
+  local class_name = vim.fn.fnamemodify(absolute_file, ":t:r")
+  local is_header_input = absolute_file:match("%.h$") and true or false
+  local found_h = is_header_input and absolute_file or nil
+  local found_cpp = not is_header_input and absolute_file or nil
+
   if is_header_input then
-    found_h = absolute_file
+    for _, dir in ipairs(context.source_dirs) do
+      local p = fs.normalize(fs.joinpath(dir, class_name .. ".cpp"))
+      if vim.fn.filereadable(p) == 1 then found_cpp = p; break end
+    end
   else
     for _, dir in ipairs(context.header_dirs) do
       local p = fs.normalize(fs.joinpath(dir, class_name .. ".h"))
-      if vim.fn.filereadable(p) == 1 then
-        found_h = p
-        break -- 見つかったら終了
-      end
+      if vim.fn.filereadable(p) == 1 then found_h = p; break end
     end
   end
 
-  -- ★変更: ソースファイルの探索 (候補リスト順)
-  if not is_header_input then
-    found_cpp = absolute_file
-  else
-    for _, dir in ipairs(context.source_dirs) do
-      local p = fs.normalize(fs.joinpath(dir, class_name .. ".cpp"))
-      if vim.fn.filereadable(p) == 1 then
-        found_cpp = p
-        break -- 見つかったら終了
-      end
-    end
-  end
-
-  if not found_h and not found_cpp then
-    return nil, "Could not resolve any existing class files for: " .. class_name
-  end
+  if not found_h and not found_cpp then return nil, "Could not resolve pair sync" end
 
   return {
     h = found_h,
@@ -110,6 +162,13 @@ function M.resolve_class_pair(file_path)
     is_header_input = is_header_input,
     module = context.module,
   }
+end
+
+-- 非同期版フォールバック
+function M.resolve_class_pair_fallback(file_path, on_complete)
+  local res, err = M.resolve_class_pair_fallback_sync(file_path)
+  if on_complete then on_complete(res, err) end
+  return res, err
 end
 
 function M.get_fd_directory_cmd(base_path)
