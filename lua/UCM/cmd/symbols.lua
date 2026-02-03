@@ -15,8 +15,8 @@ local function flatten_hierarchy(symbols, default_path)
     item.file_path = item.file_path or default_path
     table.insert(flat_list, item)
 
-    if item.kind == "UClass" or item.kind == "Class" or 
-       item.kind == "UStruct" or item.kind == "Struct" then
+    local k = (item.kind or ""):lower()
+    if k == "uclass" or k == "class" or k == "ustruct" or k == "struct" or k == "uenum" or k == "enum" then
        
        if item.methods then
          for _, access in ipairs({"public", "protected", "private", "impl"}) do
@@ -142,15 +142,15 @@ function M.execute(opts)
 
   log.get().debug("Parsing symbols for: %s", target_file)
 
-  local ok, symbols = unl_api.provider.request("ucm.get_file_symbols", {
+  unl_api.provider.request("ucm.get_file_symbols", {
       file_path = target_file
-  })
-
-  if ok and symbols then
-      show_picker(target_file, symbols)
-  else
-      log.get().error("Failed to parse symbols for %s", target_file)
-  end
+  }, function(ok, symbols)
+      if ok and symbols then
+          show_picker(target_file, symbols)
+      else
+          log.get().error("Failed to parse symbols for %s", target_file)
+      end
+  end)
 end
 
 return M

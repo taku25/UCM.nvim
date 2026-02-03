@@ -29,42 +29,72 @@ local function merge_cpp_implementation(header_class, cpp_class_map)
 end
 
 ---
--- ファイルのシンボル情報を解析して返す
+-- ファイルのシンボル情報をDBから取得して返す
 -- .h の場合は .cpp も探して実装情報をマージする
 -- @param file_path string
--- @return table リスト形式のシンボルデータ
-function M.get_outline(file_path)
-    local pair, _ = cmd_core.resolve_class_pair(file_path)
-    
-    -- ペアが見つからなければ単体解析
-    if not pair then
-        log.get().debug("Outline: No pair found for %s, parsing single file.", file_path)
-        local result = unl_parser.parse(file_path, "UCM")
-        return result.list or {}
+-- @param on_complete function(symbols)
+function M.get_outline(file_path, on_complete)
+    if not file_path or file_path == "" then
+        log.get().error("Outline: get_outline called with empty file_path")
+        if on_complete then on_complete({}) end
+        return
     end
 
-    -- ヘッダーを主として解析
-    local header_path = pair.h
-    local cpp_path = pair.cpp
-    
-    -- ヘッダー解析
-    local h_result = unl_parser.parse(header_path, "UCM")
-    local symbols = h_result.list or {}
+    local normalized_path = file_path:gsub("\\", "/")
+    log.get().debug("Outline: Fetching symbols for normalized path: %s", normalized_path)
 
-    -- ソースがあれば解析してマージ
-    if cpp_path and vim.fn.filereadable(cpp_path) == 1 then
-        local cpp_result = unl_parser.parse(cpp_path, "UCM")
-        
-        -- ヘッダー内の各クラスに対して、CPP側の実装を紐付ける
-        for _, symbol in ipairs(symbols) do
-            if symbol.kind == "UClass" or symbol.kind == "Class" or 
-               symbol.kind == "UStruct" or symbol.kind == "Struct" then
-                merge_cpp_implementation(symbol, cpp_result.map)
-            end
+    local unl_api = require("UNL.api")
+    local pair, _ = cmd_core.resolve_class_pair(normalized_path)
+    
+    local function fetch_symbols(path, cb)
+        if not path or path == "" then
+            cb({})
+            return
+        end
+        local p = path:gsub("\\", "/")
+        unl_api.db.get_file_symbols(p, function(symbols)
+            cb(symbols or {})
+        end)
+    end
+
+    -- .cpp ファイルの場合、ペアのヘッダーがあるならそれをベースにする
+    local base_path = normalized_path
+    local extra_path = nil
+
+    if normalized_path:match("%.cpp$") or normalized_path:match("%.c$") then
+        if pair and pair.h then
+            base_path = pair.h
+            extra_path = normalized_path
+        end
+    else
+        -- .h の場合、ペアの .cpp があればマージ対象にする
+        if pair and pair.cpp then
+            extra_path = pair.cpp
         end
     end
 
-    return symbols
+    log.get().debug("Outline: Base=%s, Extra=%s", base_path, tostring(extra_path))
+
+    fetch_symbols(base_path, function(base_symbols)
+        if extra_path and vim.fn.filereadable(extra_path) == 1 then
+            fetch_symbols(extra_path, function(extra_symbols)
+                local extra_class_map = {}
+                for _, s in ipairs(extra_symbols) do
+                    extra_class_map[s.name] = s
+                end
+
+                for _, symbol in ipairs(base_symbols) do
+                    if symbol.kind == "UClass" or symbol.kind == "Class" or 
+                       symbol.kind == "UStruct" or symbol.kind == "Struct" then
+                        merge_cpp_implementation(symbol, extra_class_map)
+                    end
+                end
+                on_complete(base_symbols)
+            end)
+        else
+            on_complete(base_symbols)
+        end
+    end)
 end
 
 return M
