@@ -46,11 +46,13 @@ end
 function M.create_declaration()
   cmd_create_decl.execute()
 end
+M.create_decl = M.create_declaration
 
 --- Create function implementation in source from declaration in header.
 function M.create_implementation()
   cmd_create_impl.execute()
 end
+M.create_impl = M.create_implementation
 
 --- Delete a class or file, interactively if file path is omitted.
 -- @param opts table|nil { file_path }

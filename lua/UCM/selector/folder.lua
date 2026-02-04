@@ -30,10 +30,15 @@ function M.resolve_locations(target_dir)
     local component = fs.basename(dir)
     for _, rule in ipairs(rules) do
       if component:match(rule.regex) then
-        local alternate_path = fs.joinpath(fs.dirname(dir), rule.replacement)
+        -- 現在のターゲットディレクトリから、マッチしたディレクトリ(Public/Private等)までの相対パスを抽出
+        local rel_path = normalized_target:sub(#dir + 1)
+        -- 置換先のベースディレクトリを作成
+        local alternate_base = fs.joinpath(fs.dirname(dir), rule.replacement)
+        -- 相対パスを結合して、正しい対となるディレクトリを特定
+        local alternate_path = fs.normalize(fs.joinpath(alternate_base, rel_path))
 
         if vim.fn.isdirectory(alternate_path) == 1 then
-          local norm_alt = fs.normalize(alternate_path)
+          local norm_alt = alternate_path
 
           -- ★★★ 修正箇所: タイプと格納先リストの関係を正常化 ★★★
 

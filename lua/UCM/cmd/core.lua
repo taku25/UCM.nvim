@@ -57,6 +57,7 @@ end
 -- @param file_path string
 -- @param on_complete function|nil (table|nil, string|nil) - もしnilなら同期的にFSから検索する
 function M.resolve_class_pair(file_path, on_complete)
+  local logger = log.get()
   local absolute_file = fs.normalize(file_path)
   if vim.fn.filereadable(absolute_file) ~= 1 then
     local err = "Input file does not exist: " .. absolute_file
@@ -65,116 +66,88 @@ function M.resolve_class_pair(file_path, on_complete)
 
   local class_name = vim.fn.fnamemodify(absolute_file, ":t:r")
   local is_header_input = absolute_file:match("%.h$") and true or false
+  
+  logger.info("Resolving pair for: %s (Class: %s)", absolute_file, class_name)
 
-  -- 非同期コールバックがない場合は、同期的にFSから探す (互換性のため)
+  -- 非同期コールバックがない場合は、同期的にFSから探す
   if not on_complete then
     return M.resolve_class_pair_fallback_sync(file_path)
   end
 
   local unl_api = require("UNL.api")
   
-  -- DBからクラス名で検索 (非同期)
-  -- 注意: get_classes の第一引数は現在 opts テーブル
-  unl_api.db.find_class_by_name(class_name, function(cls)
-    -- クラスが見つからない場合 (プレフィックス不一致など)、ファイル名ベースでDB検索を試みる
-    if not cls or cls == vim.NIL then
-        local target_file_name = is_header_input and (class_name .. ".cpp") or (class_name .. ".h")
-        
-        unl_api.db.search_files(target_file_name, function(files)
-            local found_path = nil
-            if files then
-                for _, f in ipairs(files) do
-                    -- ファイル名が完全一致するものを探す
-                    if f.filename == target_file_name then
-                        found_path = f.path
-                        break
-                    end
-                end
-            end
-            
-            if found_path then
-                local h_path = is_header_input and absolute_file or found_path
-                local cpp_path = not is_header_input and absolute_file or found_path
-                -- モジュール情報は不明だが、ファイルは見つかった
-                on_complete({
-                    h = h_path,
-                    cpp = cpp_path,
-                    class_name = class_name,
-                    is_header_input = is_header_input,
-                    module = nil 
-                })
-            else
-                -- DBにもなければファイルシステムフォールバック
-                M.resolve_class_pair_fallback(file_path, on_complete)
-            end
-        end)
-        return
+  -- 1. DBからファイル情報を取得
+  unl_api.db.get_file_symbols(absolute_file, function(symbols)
+    local cls = (symbols and #symbols > 0) and symbols[1] or nil
+    
+    if cls and cls ~= vim.NIL and cls.module_name then
+        logger.info("Found class in DB: %s (Module: %s)", cls.name, cls.module_name)
+        return M.resolve_pair_in_module(cls.module_name, class_name, absolute_file, is_header_input, on_complete)
     end
 
-    -- 対になるファイルを探す
-    local h_path = is_header_input and absolute_file or nil
-    local cpp_path = not is_header_input and absolute_file or nil
-
-    if is_header_input then
-        -- ヘッダー入力時、ソースを探す
-        local target_cpp = class_name .. ".cpp"
-        log.get().info("Searching for alternate file: %s in module %s", target_cpp, cls.module_name)
+    -- 2. DBに見つからない場合、ファイル名から全DB検索
+    logger.info("Class not in DB or no module info. Searching by filename...")
+    local target_file_name = is_header_input and (class_name .. ".cpp") or (class_name .. ".h")
+    
+    unl_api.db.search_files(target_file_name, function(files)
+        if files and #files > 0 then
+            for _, f in ipairs(files) do
+                if f.filename == target_file_name then
+                    logger.info("Found pair via global filename search: %s", f.path)
+                    return on_complete({
+                        h = is_header_input and absolute_file or f.path,
+                        cpp = not is_header_input and absolute_file or f.path,
+                        class_name = class_name, is_header_input = is_header_input,
+                        module = { name = f.module_name }
+                    })
+                end
+            end
+        end
         
-        -- モジュール内検索を使用 (より確実)
-        unl_api.db.search_files_in_modules({ cls.module_name }, target_cpp, 10, function(files)
-            if files then
-                log.get().info("SearchFiles returned %d results", #files)
-                for _, f in ipairs(files) do
-                    -- search_files_in_modules の戻り値は file_path キーを持つ
-                    local fname = vim.fn.fnamemodify(f.file_path, ":t")
-                    if fname == target_cpp then
-                        cpp_path = f.file_path
-                        break
-                    end
-                end
-                -- 見つからなければ最初の候補
-                if not cpp_path and #files > 0 then
-                    cpp_path = files[1].file_path
-                end
-            else
-                log.get().info("SearchFiles returned nil/empty for %s", target_cpp)
-            end
-            on_complete({
-                h = h_path,
-                cpp = cpp_path,
-                class_name = class_name,
-                is_header_input = is_header_input,
-                module = { name = cls.module_name, root = cls.module_root }
-            })
-        end)
-    else
-        -- ソース入力時、ヘッダーを探す
-        local target_h = class_name .. ".h"
-        unl_api.db.search_files_in_modules({ cls.module_name }, target_h, 10, function(files)
-            if files then
-                -- 1. モジュールルート内にあるものを優先 (search_files_in_modules は既にモジュール絞り込み済み)
-                for _, f in ipairs(files) do
-                    local fname = vim.fn.fnamemodify(f.file_path, ":t")
-                    if fname == target_h then
-                        h_path = f.file_path
-                        break
-                    end
-                end
-                -- 2. 見つからなければ最初の候補
-                if not h_path and #files > 0 then
-                    h_path = files[1].file_path
-                end
-            end
-            on_complete({
-                h = h_path,
-                cpp = cpp_path,
-                class_name = class_name,
-                is_header_input = is_header_input,
-                module = { name = cls.module_name, root = cls.module_root }
-            })
-        end)
-    end
+        -- 3. それでもダメならFSフォールバック
+        logger.info("DB search failed. Falling back to File System search...")
+        local res, err = M.resolve_class_pair_fallback_sync(file_path)
+        if res then
+            logger.info("Found pair via File System fallback: %s", is_header_input and res.cpp or res.h)
+            on_complete(res)
+        else
+            logger.warn("All resolution methods failed: %s", tostring(err))
+            on_complete(nil, err)
+        end
+    end)
   end)
+end
+
+-- ヘルパー: 特定のモジュール内でペアを解決する
+function M.resolve_pair_in_module(module_name, class_name, absolute_file, is_header_input, on_complete)
+    local unl_api = require("UNL.api")
+    local target_ext = is_header_input and ".cpp" or ".h"
+    local target_file = class_name .. target_ext
+    
+    unl_api.db.search_files_in_modules({ module_name }, target_file, 10, function(files)
+        local pair_path = nil
+        if files then
+            for _, f in ipairs(files) do
+                if vim.fn.fnamemodify(f.file_path, ":t") == target_file then
+                    pair_path = f.file_path; break
+                end
+            end
+            if not pair_path and #files > 0 then pair_path = files[1].file_path end
+        end
+        
+        if pair_path then
+            on_complete({
+                h = is_header_input and absolute_file or pair_path,
+                cpp = not is_header_input and absolute_file or pair_path,
+                class_name = class_name,
+                is_header_input = is_header_input,
+                module = { name = module_name }
+            })
+        else
+            -- DBで見つからなかった場合はFSフォールバック
+            M.resolve_class_pair_fallback(absolute_file, on_complete)
+        end
+    end)
 end
 
 -- 同期版フォールバック (UNXなどの同期コンテキスト用)
