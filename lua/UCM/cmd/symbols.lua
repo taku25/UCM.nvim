@@ -68,11 +68,17 @@ local function show_picker(file_path, symbols)
         icon = " "
     end
 
+    -- パスの正規化と行番号の数値化 (Telescope プレビューアのタイムアウト対策)
+    local target_path = (item.file_path or file_path):gsub("\\", "/")
+    local line_num = tonumber(item.line) or 1
+    if line_num <= 0 then line_num = 1 end
+
     table.insert(items, {
       display = string.format("%s %-35s  (%s)", icon, item.name, kind),
       value = item,
-      filename = item.file_path,
-      lnum = item.line,
+      filename = target_path,
+      lnum = line_num,
+      col = 0,
       kind = kind,
       icon = icon,
     })
@@ -93,15 +99,8 @@ local function show_picker(file_path, symbols)
     on_submit = function(selection)
       if not selection then return end
       
-      -- ★修正: selection が item そのものである場合と、ラッパー(value)である場合の両方に対応
       local data = selection.value or selection
-
-      -- 1. ファイルパスの取得
-      -- selection.filename (Picker用) か data.file_path (元データ) のどちらかある方を使う
       local target_path = data.file_path or data.filename or selection.filename
-      
-      -- 2. 行番号の取得
-      -- data.line (元データ/Tree-sitter) か data.lnum (Picker用) のどちらかある方を使う
       local target_line = data.line or data.lnum or selection.lnum
 
       if target_path then
@@ -118,13 +117,7 @@ local function show_picker(file_path, symbols)
       if target_line then
           local line = tonumber(target_line)
           if line then
-              -- Tree-sitter由来(line)なら0-basedなので +1
-              -- Picker由来(lnum)なら通常1-basedだが、元のデータが0-basedならそのまま来ている可能性が高い
-              -- ユーザーログの "line = 30" (GetDestroyOnSystemFinish) は0-based (エディタ上31行目) なので +1 が正解
-              local ok, err = pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
-              if not ok then
-                  log.get().warn("Failed to set cursor: " .. tostring(err))
-              end
+              pcall(vim.api.nvim_win_set_cursor, 0, { line, 0 })
               vim.cmd("normal! zz")
           end
       end
