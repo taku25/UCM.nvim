@@ -1,6 +1,6 @@
 -- lua/UCM/cmd/new.lua (すべての修正を反映した完全版)
 
-local unl_picker = require("UNL.backend.picker")
+local unl_picker = require("UNL.picker")
 local selectors = require("UCM.selector")
 local cmd_core = require("UCM.cmd.core")
 local path = require("UCM.path")
@@ -304,7 +304,7 @@ function M.run(opts)
     table.sort(static_choices, function(a, b) return a.value < b.value end)
     local all_choices = vim.list_extend(dynamic_choices, static_choices)
 
-    unl_picker.pick({
+    unl_picker.open({
       kind = "ucm_select_parent_class_combined",
       title = "  Select Parent Class",
       items = all_choices,
@@ -385,3 +385,4 @@ function M.run(opts)
 end
 
 return M
+

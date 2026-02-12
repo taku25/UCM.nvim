@@ -1,6 +1,6 @@
 local M = {}
 local specifiers_data = require("UCM.data.specifiers").data
-local unl_picker = require("UNL.backend.picker")
+local unl_picker = require("UNL.picker")
 local log = require("UCM.logger")
 local ucm_config = require("UNL.config").get("UCM")
 
@@ -100,7 +100,7 @@ function M.show_specifier_picker(macro_type, is_append_mode)
     })
   end
 
-  unl_picker.pick({
+  unl_picker.open({
     kind = "ucm_specifiers",
     title = string.format("Select Specifiers for %s %s", macro_type, is_append_mode and "(Append)" or "(New)"),
     items = picker_items,
@@ -134,7 +134,7 @@ function M.run(opts)
       table.insert(picker_items, { label = m, value = m })
   end
 
-  unl_picker.pick({
+  unl_picker.open({
     title = "Select Macro Type",
     items = picker_items,
     conf = ucm_config,
@@ -149,3 +149,4 @@ function M.run(opts)
 end
 
 return M
+

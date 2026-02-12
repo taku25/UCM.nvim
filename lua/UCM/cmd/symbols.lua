@@ -1,5 +1,5 @@
 -- lua/UCM/cmd/symbols.lua
-local unl_picker = require("UNL.backend.picker")
+local unl_picker = require("UNL.picker")
 local unl_api = require("UNL.api")
 local unl_buf_open = require("UNL.buf.open")
 local ucm_config = require("UNL.config").get("UCM")
@@ -88,7 +88,7 @@ local function show_picker(file_path, symbols)
     return vim.notify("No symbols found in " .. vim.fn.fnamemodify(file_path, ":t"), vim.log.levels.WARN)
   end
 
-  unl_picker.pick({
+  unl_picker.open({
     kind = "ucm_symbols",
     title = "Symbols in " .. vim.fn.fnamemodify(file_path, ":t"),
     items = items,
@@ -147,3 +147,4 @@ function M.execute(opts)
 end
 
 return M
+

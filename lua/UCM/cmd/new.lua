@@ -1,4 +1,4 @@
-local unl_picker = require("UNL.backend.picker")
+local unl_picker = require("UNL.picker")
 local log = require("UCM.logger")
 local unl_api = require("UNL.api")
 
@@ -77,7 +77,7 @@ function M._internal_show_picker(dynamic_choices, class_data_map, name, opts)
     end
   end
 
-  unl_picker.pick({
+  unl_picker.open({
     kind = "ucm_select_parent_class_or_struct",
     title = "  Select Parent Class or Struct",
     items = dynamic_choices,
@@ -91,3 +91,4 @@ function M._internal_show_picker(dynamic_choices, class_data_map, name, opts)
 end
 
 return M
+

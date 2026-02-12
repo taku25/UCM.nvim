@@ -1,7 +1,7 @@
 -- lua/UCM/cmd/add_struct.lua
 local ucm_log = require("UCM.logger")
 local ucm_config = require("UCM.config")
-local unl_picker = require("UNL.backend.picker")
+local unl_picker = require("UNL.picker")
 local provider = require("UNL.provider") -- UNL provider system
 
 local M = {}
@@ -61,7 +61,7 @@ function M.run(opts)
         end
     end
 
-    unl_picker.pick({
+    unl_picker.open({
         title = "Select Parent Struct (Optional)",
         items = final_list,
         conf = ucm_config.get(),
@@ -85,3 +85,4 @@ function M.run(opts)
 end
 
 return M
+

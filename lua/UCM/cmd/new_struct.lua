@@ -1,7 +1,7 @@
 -- lua/UCM/cmd/new_struct.lua
 -- Struct creation command - follows the same pattern as new.lua for classes
 
-local unl_picker = require("UNL.backend.picker")
+local unl_picker = require("UNL.picker")
 local selectors = require("UCM.selector")
 local cmd_core = require("UCM.cmd.core")
 local path = require("UCM.path")
@@ -265,7 +265,7 @@ function M.run(opts)
     log.get().debug("Total parent struct choices: %d (dynamic: %d, static: %d)", 
       #all_choices, #dynamic_choices, #static_choices)
 
-    unl_picker.pick({
+    unl_picker.open({
       kind = "ucm_select_parent_struct",
       title = "  Select Parent Struct (or None)",
       items = all_choices,
@@ -343,3 +343,4 @@ function M.run(opts)
 end
 
 return M
+
