@@ -1,5 +1,5 @@
 -- lua/UCM/logic/outline.lua
-local unl_parser = require("UNL.parser.cpp")
+
 local cmd_core = require("UCM.cmd.core")
 local log = require("UCM.logger")
 
@@ -99,3 +99,4 @@ function M.get_outline(file_path, on_complete)
 end
 
 return M
+
