@@ -1,7 +1,7 @@
 -- lua/UCM/cmd/rename.lua
 
 -- (変更) 読み込むモジュールを新しい find_picker に変更
-local unl_find_picker = require("UNL.backend.find_picker")
+local unl_picker = require("UNL.picker")
 
 local unl_finder = require("UNL.finder")
 local cmd_core = require("UCM.cmd.core")
@@ -268,7 +268,7 @@ function M.run(opts)
   -- シナリオ1: 完全UIモード (ユーザーが:UCM renameを実行)
   log.get().debug("UI mode: UCM rename")
   
-  unl_find_picker.pick({
+  unl_picker.open({
     title = "  Select Class File to Rename",
     conf = get_config(),
     logger_name = "UCM",
@@ -288,3 +288,5 @@ function M.run(opts)
 end
 
 return M
+
+

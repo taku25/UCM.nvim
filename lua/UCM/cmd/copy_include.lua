@@ -1,5 +1,5 @@
 local unl_picker = require("UNL.backend.picker")
-local unl_find_picker = require("UNL.backend.find_picker")
+local unl_picker = require("UNL.picker")
 local unl_finder = require("UNL.finder")
 local unl_api = require("UNL.api")
 local log = require("UCM.logger")
@@ -119,7 +119,7 @@ function M.run(opts)
         end
         table.sort(items, function(a,b) return a.display < b.display end)
 
-        unl_picker.pick({
+        unl_picker.open({
           kind = "ucm_copy_include",
           title = "Select Class to Copy #include",
           items = items,
@@ -134,7 +134,7 @@ function M.run(opts)
 
     logger.info("UEP not available. Falling back to simple header file search.")
     
-    unl_find_picker.pick({
+    unl_picker.open({
         title = "Select Header File (Fallback Mode)",
         conf = require("UNL.config").get("UCM"),
         logger_name = "UCM",
@@ -156,3 +156,5 @@ function M.run(opts)
 end
 
 return M
+
+

@@ -1,7 +1,7 @@
 -- lua/UCM/cmd/move.lu-- lua/UCM/cmd/move.lua
 
 -- (変更) 読み込むモジュールを新しい find_picker に変更
-local unl_find_picker = require("UNL.backend.find_picker")
+local unl_picker = require("UNL.picker")
 local cmd_core = require("UCM.cmd.core")
 local log = require("UCM.logger")
 local fs = require("vim.fs")
@@ -229,7 +229,7 @@ local function ask_for_destination_and_execute(source_file, original_opts)
   -- ★★★ 修正箇所ここまで ★★★
   --
   -- find_picker を使って移動先のディレクトリを選択させる
-  unl_find_picker.pick({
+  unl_picker.open({
     title = "  Select Destination for '" .. vim.fn.fnamemodify(source_file, ":t:r") .. "'",
     conf = get_config(),
     logger_name = "UCM",
@@ -277,7 +277,7 @@ function M.run(opts)
   log.get().debug("UI mode: UCM move")
   
   -- find_picker を使って移動元のファイルを選択させる
-  unl_find_picker.pick({
+  unl_picker.open({
     title = " Select Class File to Move",
     conf = get_config(),
     logger_name = "UCM",
@@ -297,3 +297,5 @@ function M.run(opts)
 end
 
 return M
+
+

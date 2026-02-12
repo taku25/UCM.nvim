@@ -1,7 +1,7 @@
 -- lua/UCM/cmd/delete.lua
 
 -- (変更) 読み込むモジュールを新しい find_picker に変更
-local unl_find_picker = require("UNL.backend.find_picker")
+local unl_picker = require("UNL.picker")
 local unl_finder = require("UNL.finder")
 local cmd_core = require("UCM.cmd.core")
 local log = require("UCM.logger")
@@ -161,8 +161,8 @@ function M.run(opts)
   log.get().debug("UI mode: UCM delete")
 
   -- ▼▼▼ ここからが変更箇所 ▼▼▼
-  -- 汎用の unl_picker から、新しい unl_find_picker に呼び出し先を変更
-  unl_find_picker.pick({
+  -- 汎用の unl_picker から、新しい unl_picker に呼び出し先を変更
+  unl_picker.open({
     title = " Select Class File to Delete",
     conf = get_config(),
     logger_name = "UCM",
@@ -185,3 +185,5 @@ function M.run(opts)
 end
 
 return M
+
+
