@@ -5,6 +5,93 @@ local log = require("UCM.logger")
 
 local M = {}
 
+-- DB から返ってくるフラットな members 配列を
+-- build_class_node が期待する {methods, fields} ネスト形式に変換する
+local ACCESSES = { "public", "protected", "private" }
+
+local KIND_MAP = {
+    UClass  = "UClass",  uclass  = "UClass",
+    UStruct = "UStruct", ustruct = "UStruct",
+    UEnum   = "UEnum",   uenum   = "UEnum",
+    class   = "Class",   struct  = "Struct",
+    ["Class"]  = "Class", ["Struct"] = "Struct",
+}
+
+local function member_kind(m, class_name)
+    local mtype  = m.type  or ""
+    local flags  = m.flags or ""
+    if mtype == "function" then
+        if flags:find("UFUNCTION") then return "UFunction" end
+        local n = m.name or ""
+        if n == class_name or n == ("~" .. class_name) then return "Constructor" end
+        return "Function"
+    else
+        if flags:find("UPROPERTY") then return "UProperty" end
+        return "Field"
+    end
+end
+
+local function transform_db_symbol(db_sym, fallback_file_path)
+    local methods = {}
+    local fields  = {}
+    for _, a in ipairs(ACCESSES) do methods[a] = {}; fields[a] = {} end
+
+    local cname = db_sym.name or ""
+    local sym_file = db_sym.file_path or fallback_file_path or ""
+
+    for _, m in ipairs(db_sym.members or {}) do
+        local access = m.access or "public"
+        if not methods[access] then methods[access] = {}; fields[access] = {} end
+
+        local kind = member_kind(m, cname)
+        local item = {
+            name        = m.name,
+            line        = m.line,
+            kind        = kind,
+            detail      = m.detail,
+            return_type = m.return_type,
+            file_path   = (m.file_path and m.file_path ~= "") and m.file_path or sym_file,
+            access      = access,
+            is_static   = m.is_static,
+        }
+
+        local mtype = m.type or ""
+        if mtype == "function" then
+            table.insert(methods[access], item)
+        else
+            table.insert(fields[access], item)
+        end
+    end
+
+    -- 空の access バケットは除去
+    for _, a in ipairs(ACCESSES) do
+        if #methods[a] == 0 then methods[a] = nil end
+        if #fields[a]  == 0 then fields[a]  = nil end
+    end
+
+    local raw_kind = db_sym.kind or db_sym.type or ""
+    local class_kind = KIND_MAP[raw_kind] or raw_kind
+
+    return {
+        name     = cname,
+        kind     = class_kind,
+        line     = db_sym.line,
+        end_line = db_sym.end_line,
+        file_path = sym_file,
+        methods  = methods,
+        fields   = fields,
+    }
+end
+
+local function transform_db_symbols(db_symbols, fallback_file_path)
+    if type(db_symbols) ~= "table" then return {} end
+    local result = {}
+    for _, sym in ipairs(db_symbols) do
+        table.insert(result, transform_db_symbol(sym, fallback_file_path))
+    end
+    return result
+end
+
 -- ヘルパー: CPPの実装データをヘッダーの定義データにマージする
 local function merge_cpp_implementation(header_class, cpp_class_map)
     if not header_class or not cpp_class_map then return end
@@ -75,17 +162,21 @@ function M.get_outline(file_path, on_complete)
 
         log.get().debug("Outline: Base=%s, Extra=%s", base_path, tostring(extra_path))
 
-        fetch_symbols(base_path, function(base_symbols)
+        fetch_symbols(base_path, function(base_symbols_raw)
+            -- DB フォーマット → Lua UI フォーマットに変換
+            local base_symbols = transform_db_symbols(base_symbols_raw, base_path)
+
             if extra_path and vim.fn.filereadable(extra_path) == 1 then
-                fetch_symbols(extra_path, function(extra_symbols)
+                fetch_symbols(extra_path, function(extra_symbols_raw)
+                    local extra_symbols = transform_db_symbols(extra_symbols_raw, extra_path)
                     local extra_class_map = {}
                     for _, s in ipairs(extra_symbols) do
                         extra_class_map[s.name] = s
                     end
 
                     for _, symbol in ipairs(base_symbols) do
-                        if symbol.kind == "UClass" or symbol.kind == "Class" or 
-                           symbol.kind == "UStruct" or symbol.kind == "Struct" then
+                        local k = symbol.kind or ""
+                        if k == "UClass" or k == "Class" or k == "UStruct" or k == "Struct" then
                             merge_cpp_implementation(symbol, extra_class_map)
                         end
                     end
