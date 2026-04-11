@@ -10,9 +10,9 @@ local M = {}
 local ACCESSES = { "public", "protected", "private" }
 
 local KIND_MAP = {
-    UClass  = "UClass",  uclass  = "UClass",
-    UStruct = "UStruct", ustruct = "UStruct",
-    UEnum   = "UEnum",   uenum   = "UEnum",
+    UClass  = "UClass",  uclass  = "UClass",  UCLASS  = "UClass",
+    UStruct = "UStruct", ustruct = "UStruct",  USTRUCT = "UStruct",
+    UEnum   = "UEnum",   uenum   = "UEnum",    UENUM   = "UEnum",
     class   = "Class",   struct  = "Struct",
     ["Class"]  = "Class", ["Struct"] = "Struct",
 }
@@ -175,8 +175,8 @@ function M.get_outline(file_path, on_complete)
                     end
 
                     for _, symbol in ipairs(base_symbols) do
-                        local k = symbol.kind or ""
-                        if k == "UClass" or k == "Class" or k == "UStruct" or k == "Struct" then
+                        local k = (symbol.kind or ""):lower()
+                        if k:find("class") or k:find("struct") then
                             merge_cpp_implementation(symbol, extra_class_map)
                         end
                     end
