@@ -46,11 +46,17 @@ local function flatten_hierarchy(symbols, default_path)
 end
 
 -- シンボルリストをピッカーで表示する
-local function show_picker(file_path, symbols)
-  local flat_symbols = flatten_hierarchy(symbols, file_path)
+local function show_picker(file_path, symbols, top_level_only)
+  local source = top_level_only and symbols or flatten_hierarchy(symbols, file_path)
   local items = {}
-  
-  for _, item in ipairs(flat_symbols) do
+
+  for _, item in ipairs(source) do
+    if top_level_only then item.file_path = item.file_path or file_path end
+    -- ! モード: class/struct/enum のみ
+    if top_level_only then
+      local k = (item.kind or ''):lower()
+      if not (k:find('class') or k:find('struct') or k:find('enum')) then goto continue end
+    end
     local kind = item.kind or "Unknown"
     local kind_lower = kind:lower()
     
@@ -82,6 +88,7 @@ local function show_picker(file_path, symbols)
       kind = kind,
       icon = icon,
     })
+    ::continue::
   end
 
   if #items == 0 then
@@ -90,7 +97,7 @@ local function show_picker(file_path, symbols)
 
   unl_picker.open({
     kind = "ucm_symbols",
-    title = "Symbols in " .. vim.fn.fnamemodify(file_path, ":t"),
+    title = (top_level_only and "Types in " or "Symbols in ") .. vim.fn.fnamemodify(file_path, ":t"),
     items = items,
     conf = ucm_config,
     preview_enabled = true,
@@ -139,7 +146,7 @@ function M.execute(opts)
       file_path = target_file
   }, function(ok, symbols)
       if ok and symbols then
-          show_picker(target_file, symbols)
+          show_picker(target_file, symbols, opts.has_bang)
       else
           log.get().error("Failed to parse symbols for %s", target_file)
       end

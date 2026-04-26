@@ -89,17 +89,16 @@ builder.create({
     },
 
     ["switch"] = {
-      handler = function()
-        -- switchは常に現在のバッファを対象とするため引数なし
+      handler = function(opts)
         local current_file = vim.api.nvim_buf_get_name(0)
         if current_file and current_file ~= "" then
-          ucm_api.switch_file({ current_file_path = current_file })
+          require("UCM.cmd.switch").run({ current_file_path = current_file, has_bang = opts and opts.has_bang })
         else
           require("UCM.logger").get().warn("No file open in current buffer to switch.")
         end
       end,
-      desc = "Switch between header and source file.",
-      -- このコマンドは引数を取らない
+      bang = true,
+      desc = "Switch between header and source file. Use '!' to open in a vertical split.",
       args = {},
     },
 
@@ -122,7 +121,13 @@ builder.create({
     },
     ["symbols"] = {
       handler = function(opts) ucm_api.symbols(opts) end,
-      desc = "Show symbols (functions/properties) in the current file.",
+      bang = true,
+      desc = "Show symbols in the current file. Use '!' to show only class/struct/enum definitions.",
+      args = { { name = "file_path", required = false } },
+    },
+    ["insert_include"] = {
+      handler = function(opts) ucm_api.insert_include(opts) end,
+      desc = "Insert a #include line into the current buffer at the correct position.",
       args = { { name = "file_path", required = false } },
     },
   },

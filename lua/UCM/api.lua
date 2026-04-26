@@ -15,6 +15,7 @@ local cmd_create_impl = require("UCM.cmd.create_impl")
 local cmd_copy_imp = require("UCM.cmd.copy_imp")
 local cmd_specifiers = require("UCM.cmd.specifiers")
 local cmd_symbols = require("UCM.cmd.symbols")
+local cmd_insert_include = require("UCM.cmd.insert_include")
 
 local M = {}
 
@@ -96,9 +97,15 @@ function M.specifiers(opts)
 end
 
 --- Show symbols (functions/properties) in the current file.
--- @param opts table|nil { file_path }
+-- @param opts table|nil { file_path, has_bang }
 function M.symbols(opts)
   cmd_symbols.execute(opts)
+end
+
+--- Insert a #include line into the current buffer.
+-- @param opts table|nil { file_path }
+function M.insert_include(opts)
+  cmd_insert_include.execute(opts)
 end
 
 return M

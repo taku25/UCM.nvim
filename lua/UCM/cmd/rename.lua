@@ -24,7 +24,9 @@ local function replace_content_in_file(file_path, old_name, new_name)
   local read_ok, lines = pcall(vim.fn.readfile, file_path)
   if not read_ok then return false, "Failed to read file: " .. tostring(lines) end
   local content = table.concat(lines, "\n")
-  content = content:gsub("\b" .. old_name .. "\b", new_name)
+  -- %f[%w_] は Lua の frontier pattern でワード境界を表す (\b の代替)
+  local escaped_old = old_name:gsub("([%(%)%.%%%+%-%*%?%[%^%$])", "%%%1")
+  content = content:gsub("%f[%w_]" .. escaped_old .. "%f[^%w_]", new_name)
   content = content:gsub('"' .. old_name .. '%.generated%.h"', '"' .. new_name .. '.generated.h"')
   local write_ok, write_err = pcall(vim.fn.writefile, vim.split(content, '\n'), file_path)
   if not write_ok then return false, "Failed to write updated content: " .. tostring(write_err) end
