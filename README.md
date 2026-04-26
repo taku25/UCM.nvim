@@ -27,12 +27,17 @@
   * **Intelligent Implementation Generation**:
       * The `:UCM copy_imp` command automatically generates the C++ implementation stub for the function declaration under the cursor.
       * It intelligently strips `UFUNCTION` macros, `virtual`/`override` keywords, and default arguments (`= 0.f`), while automatically adding the class scope and `Super::` calls where appropriate.
+      * **Bug fix**: Rename now uses Lua frontier patterns (`%f[%w_]`) for accurate word-boundary matching.
   * **Rider-like Code Generation**:
       * `:UCM create_impl`: Instantly creates a function implementation in the `.cpp` file from a declaration in the `.h` file. Automatically adds `Super::` calls for overrides.
       * `:UCM create_decl`: Generates a function declaration in the `.h` file from an implementation in the `.cpp` file.
       * `:UCM add_struct`: Interactively inserts a new `USTRUCT` definition. Can optionally fetch base struct suggestions from the project using `UEP`.
   * **Smart Includes**:
       * Automatically calculates the correct relative `#include` path (from module `Public` or `Classes` folders) for the current file or a selected class and copies it to the clipboard.
+      * `:UCM insert_include`: Opens a picker to select any header from the project, resolves the correct `#include` path, and inserts it after the last `#include` in the current buffer. Skipped silently if the include already exists.
+  * **Enhanced File Navigation**:
+      * `:UCM switch!`: Opens the paired header/source file in a vertical split instead of the current window.
+      * `:UCM symbols!`: Shows only top-level type definitions (classes, structs, enums) in the picker — useful for quickly jumping to the class declaration without noise from member functions.
   * **Macro Wizard**:
       * Provides an intelligent completion wizard for Unreal Engine reflection macros (`UPROPERTY`, `UFUNCTION`, etc.).
       * Allows interactive multi-selection of appropriate specifiers (e.g., `EditAnywhere`, `BlueprintReadWrite`) to insert directly into your code.
@@ -157,6 +162,9 @@ opts = {
 " Switch between the header (.h) and source (.cpp) file.
 :UCM switch
 
+" Switch between the header (.h) and source (.cpp) file, opening in a vertical split.
+:UCM switch!
+
 " Generates the implementation code for the function declaration under the cursor and copies it to the clipboard.
 :UCM copy_imp
 
@@ -174,6 +182,12 @@ opts = {
 
 " Show a flat list of symbols (functions, properties, etc.) in the current file for quick navigation.
 :UCM symbols
+
+" Show only top-level type definitions (classes, structs, enums) in the current file.
+:UCM symbols!
+
+" Pick a header from the project and insert its #include after the last #include in the buffer.
+:UCM insert_include
 
 " Interactively insert a new USTRUCT definition (can select parent struct via UEP)
 :UCM add_struct

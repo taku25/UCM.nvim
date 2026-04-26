@@ -30,6 +30,9 @@ Main Features:
   UI depending on your environment.
 - Extensible API:
   Easily integrates with filer plugins like `neo-tree`.
+- Bug Fix:
+  Rename uses Lua frontier patterns (%f[%w_]) for accurate word-boundary
+  matching instead of the incorrect \b escape.
 
 ==============================================================================
 2. Usage                                                      *UCM-usage*
@@ -57,9 +60,26 @@ for scripting and automation. If arguments are omitted, a UI will be launched.
 :UCM move <Source/File/Path> <Target/Directory>
     Moves a class file to a new directory. The file extension is optional.
 
-:UCM switch
+:UCM switch                                               *UCM-switch*
     If the current file is a header, switches to the source. If it's a
-    source, switches to the header.
+    source, switches to the header. Opens in the current window.
+
+:UCM switch!                                             *UCM-switch-bang*
+    Same as |:UCM switch|, but opens the paired file in a vertical split.
+
+:UCM symbols                                             *UCM-symbols*
+    Shows a flat list of all symbols (functions, properties, classes, etc.)
+    in the current file via the UI picker for quick navigation.
+
+:UCM symbols!                                           *UCM-symbols-bang*
+    Same as |:UCM symbols|, but shows only top-level type definitions
+    (classes, structs, enums). The picker title changes to "Types in ...".
+
+:UCM insert_include                                  *UCM-insert-include*
+    Opens a UI picker to select a header file from the project (using the
+    UEP class list or `fd` as a fallback). Resolves the correct `#include`
+    path and inserts it after the last `#include` line in the current
+    buffer. Skipped if the include already exists.
 
 ==============================================================================
 3. Configuration                                       *UCM-configuration*
