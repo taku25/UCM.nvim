@@ -1,4 +1,4 @@
--- lua/UCM/cmd/new.lua (すべての修正を反映した完全版)
+﻿-- lua/UCM/cmd/new.lua (すべての修正を反映した完全版)
 
 local unl_picker = require("UNL.picker")
 local selectors = require("UCM.selector")
@@ -229,128 +229,146 @@ function M.run(opts)
   local base_dir = opts.target_dir or vim.loop.cwd()
   local collected_opts = { on_complete = opts.on_complete }
 
-  local show_picker -- Forward declaration
+  local show_picker -- Forward declaration (kept for compatibility)
 
   local function ask_for_parent_class()
     local class_data_map = {}
-    local static_choices = {}
     local seen_classes = {}
+
+    -- static テンプレートを先に構築・ソート
+    local static_choices = {}
     for _, rule in ipairs(conf.template_rules) do
       local name = rule.base_class_name
       if name and not seen_classes[name] then
         table.insert(static_choices, {
           value = name,
-          label = string.format("%-40s (%s)", name, "   Engine Template"),
-          -- こちらはファイルパスがないので filename は設定しない
-          filename = "" -- ここには filename キーがある
+          label = string.format("%-40s (%s)", name, "   Engine Template"),
+          filename = "",
         })
         seen_classes[name] = true
       end
     end
-
-    local dynamic_choices = {}
-    local unl_api_ok, unl_api = pcall(require, "UNL.api")
-    if unl_api_ok then
-      log.get().info("Fetching project classes from UNL.db...")
-      local project_root = require("UNL.finder").project.find_project_root(base_dir)
-      if not project_root then
-        log.get().warn("Could not find project root from '%s'. Cannot fetch dynamic classes.", base_dir)
-      end
-      
-      unl_api.db.get_classes({ extra_where = "AND (c.symbol_type = 'class' OR c.symbol_type = 'UCLASS')" }, function(classes, err)
-          if err then
-              log.get().error("Error getting classes: " .. tostring(err))
-              classes = nil
-          end
-          
-          if classes and #classes > 0 then
-            log.get().info("Successfully fetched %d classes.", #classes)
-            for _, class_info in ipairs(classes) do
-                  local c_name = class_info.name
-                  local file_path = class_info.path
-                  
-                  if c_name and not seen_classes[c_name] and c_name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") then
-                    
-                    table.insert(dynamic_choices, {
-                      value = c_name,
-                      label = string.format("%s - %s", c_name, vim.fn.fnamemodify(file_path, ":t")),
-                      filename = file_path, 
-                    })
-
-                    seen_classes[c_name] = true
-                    class_data_map[c_name] = {
-                      header_file = file_path,
-                      base_class = class_info.base_class
-                    }
-                  end
-            end
-          else
-            log.get().info("No class data from UNL.db. Using static template list only.")
-          end
-          
-          -- Continue with picker show
-          show_picker(dynamic_choices, static_choices, class_data_map)
-      end)
-      return -- Exit function, wait for callback
-    else
-      log.get().info("UNL.api not available. Using static template list only.")
-      show_picker(dynamic_choices, static_choices, class_data_map)
-    end
-  end
-
-  -- Move picker logic to separate function to support async flow
-  show_picker = function(dynamic_choices, static_choices, class_data_map)
-    table.sort(dynamic_choices, function(a, b) return a.value < b.value end)
     table.sort(static_choices, function(a, b) return a.value < b.value end)
-    local all_choices = vim.list_extend(dynamic_choices, static_choices)
 
-    unl_picker.open({
-      kind = "ucm_select_parent_class_combined",
-      title = "  Select Parent Class",
-      items = all_choices,
-      conf = conf,
-      logger_name = "UCM",
+    -- 選択確定時の共通ハンドラ
+    local function on_submit(selected)
+      if not selected then return log.get().info("Class creation canceled.") end
+      collected_opts.parent_class = selected
 
-      --- ▼▼▼ 修正点 2/2: プレビューを有効にします ▼▼▼
-      preview_enabled = true, -- false から true に変更！
-      --- ▲▲▲ 修正ここまで ▲▲▲
+      local parent_data = class_data_map[selected]
+      if parent_data then
+        collected_opts.parent_class_header = parent_data.header_file
+      end
+      collected_opts.class_data_map = class_data_map
 
-      on_submit = function(selected)
-        if not selected then return log.get().info("Class creation canceled.") end
-        collected_opts.parent_class = selected
-
-        local parent_data = class_data_map[selected]
-        if parent_data then
-            collected_opts.parent_class_header = parent_data.header_file
+      local plan, err = prepare_creation_plan(collected_opts, conf)
+      if err then
+        if collected_opts.on_complete then
+          pcall(collected_opts.on_complete, false, { error = err })
         end
+        return log.get().error(err)
+      end
 
-        collected_opts.class_data_map = class_data_map
-
-        local plan, err = prepare_creation_plan(collected_opts, conf)
-        if err then
-          if collected_opts.on_complete then
-            pcall(collected_opts.on_complete, false, { error = err })
-          end
-          return log.get().error(err)
-        end
-
-        if not conf.confirm_on_new then
+      if not conf.confirm_on_new then
+        execute_file_creation(plan)
+      else
+        local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
+          plan.opts.class_name, plan.header_path, plan.source_path)
+        local choices = "&Yes, create files\n&No, cancel"
+        local decision = vim.fn.confirm(prompt, choices)
+        if decision == 1 then
           execute_file_creation(plan)
         else
-          local prompt = string.format("Create class '%s'?\n\nHeader: %s\nSource: %s",
-            plan.opts.class_name, plan.header_path, plan.source_path)
-          local choices = "&Yes, create files\n&No, cancel"
-          local decision = vim.fn.confirm(prompt, choices)
-
-          if decision == 1 then
-            execute_file_creation(plan)
-          else
-            log.get().info("Class creation canceled.")
-          end
+          log.get().info("Class creation canceled.")
         end
-      end,
+      end
+    end
+
+    local unl_api_ok, unl_api = pcall(require, "UNL.api")
+    if not unl_api_ok then
+      log.get().info("UNL.api not available. Using static template list only.")
+      unl_picker.open({
+        kind = "ucm_select_parent_class_combined",
+        title = "  Select Parent Class",
+        items = static_choices,
+        conf = conf,
+        logger_name = "UCM",
+        preview_enabled = true,
+        on_submit = on_submit,
+      })
+      return
+    end
+
+    local project_root = require("UNL.finder").project.find_project_root(base_dir)
+    if not project_root then
+      log.get().warn("Could not find project root from '%s'. Cannot fetch dynamic classes.", base_dir)
+    end
+
+    -- 非同期版: callback source でピッカーを即座に開き、DB クラスを後から push する
+    -- source.fn はバックエンドによりコルーチン外から呼ばれる場合があるため自前コルーチンで実行
+    unl_picker.open({
+      kind = "ucm_select_parent_class_combined",
+      title = "  Select Parent Class",
+      source = {
+        type = "callback",
+        fn = function(push)
+          local function body()
+            -- static テンプレートを即座に push -> ピッカーがすぐ表示される
+            push(static_choices)
+
+            -- get_classes_async は coroutine.yield() を使うため常にコルーチン内で呼ぶ
+            local classes, err = unl_api.db.get_classes_async({
+              extra_where = "AND (c.symbol_type = 'class' OR c.symbol_type = 'UCLASS')",
+              project_root = project_root,
+            })
+            if err then
+              log.get().error("Error getting classes: " .. tostring(err))
+              return
+            end
+            if not (classes and #classes > 0) then
+              log.get().debug("No dynamic class data from UNL.db.")
+              return
+            end
+
+            local dynamic = {}
+            for _, class_info in ipairs(classes) do
+              local c_name = class_info.name
+              local file_path = class_info.path
+              if c_name and not seen_classes[c_name] and c_name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") then
+                table.insert(dynamic, {
+                  value = c_name,
+                  label = string.format("%s - %s", c_name, vim.fn.fnamemodify(file_path, ":t")),
+                  filename = file_path,
+                })
+                seen_classes[c_name] = true
+                class_data_map[c_name] = {
+                  header_file = file_path,
+                  base_class = class_info.base_class,
+                }
+              end
+            end
+            table.sort(dynamic, function(a, b) return a.value < b.value end)
+            push(dynamic)
+          end
+
+          -- Snacks はコルーチン内から呼ぶ、Telescope 等はコルーチン外から呼ぶため両対応
+          if coroutine.running() then
+            body()
+          else
+            local co = coroutine.create(body)
+            coroutine.resume(co)
+          end
+        end,
+      },
+      conf = conf,
+      logger_name = "UCM",
+      preview_enabled = true,
+      on_submit = on_submit,
     })
   end
+
+  -- show_picker は後方互換のために保持（非同期パスでは呼ばれない）
+  show_picker = function() end
 
   local function ask_for_class_name_and_path()
     vim.ui.input({ prompt = "Enter Class Name (e.g., MyClass or path/to/MyClass):" }, function(user_input)
