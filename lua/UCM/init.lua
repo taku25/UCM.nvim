@@ -13,6 +13,9 @@ function M.setup(user_opts)
 
   require("UCM.provider").setup()
 
+  -- #include 不足検出の Autocmd を起動
+  require("UCM.cmd.check_includes").setup_autocmds()
+
   local log = unl_log.get("UCM")
   if log then
     log.debug("UCM.nvim setup complete.")

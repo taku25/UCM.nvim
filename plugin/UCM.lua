@@ -130,5 +130,15 @@ builder.create({
       desc = "Insert a #include line into the current buffer at the correct position.",
       args = { { name = "file_path", required = false } },
     },
+    ["check_includes"] = {
+      handler = function(_opts) ucm_api.check_includes() end,
+      desc = "Check for missing #include directives in the current buffer.",
+      args = {},
+    },
+    ["fix_includes"] = {
+      handler = function(_opts) ucm_api.fix_includes() end,
+      desc = "Insert all missing #include directives detected by check_includes.",
+      args = {},
+    },
   },
 })
