@@ -105,7 +105,7 @@ function M.show_specifier_picker(macro_type, is_append_mode)
     title = string.format("Select Specifiers for %s %s", macro_type, is_append_mode and "(Append)" or "(New)"),
     items = picker_items,
     conf = ucm_config,
-    multi_select = true, 
+    multiselect = true, 
     preview_enabled = false, 
     
     format = function(item)
