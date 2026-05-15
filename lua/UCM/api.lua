@@ -16,6 +16,9 @@ local cmd_copy_imp = require("UCM.cmd.copy_imp")
 local cmd_specifiers = require("UCM.cmd.specifiers")
 local cmd_symbols = require("UCM.cmd.symbols")
 local cmd_insert_include = require("UCM.cmd.insert_include")
+local cmd_check_includes = require("UCM.cmd.check_includes")
+local cmd_check_specifiers = require("UCM.cmd.check_specifiers")
+local cmd_hover = require("UCM.cmd.hover")
 
 local M = {}
 
@@ -106,6 +109,26 @@ end
 -- @param opts table|nil { file_path }
 function M.insert_include(opts)
   cmd_insert_include.execute(opts)
+end
+
+--- Check for missing #include directives in the current buffer.
+function M.check_includes(bufnr)
+  cmd_check_includes.check(bufnr)
+end
+
+--- Insert all missing #include directives detected by check_includes.
+function M.fix_includes(bufnr)
+  cmd_check_includes.fix(bufnr)
+end
+
+--- Check current buffer for conflicting macro specifiers (e.g. BlueprintReadOnly + BlueprintReadWrite).
+function M.check_specifiers(bufnr)
+  cmd_check_specifiers.check(bufnr)
+end
+
+--- Show documentation for the specifier under the cursor.
+function M.hover_specifier()
+  cmd_hover.hover()
 end
 
 return M
